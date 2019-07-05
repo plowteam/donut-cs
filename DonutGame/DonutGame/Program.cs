@@ -12,7 +12,6 @@ namespace DonutGame
             #version 450 core
 
             layout(location = 0) in vec4 position;
-
             layout(location = 20) uniform mat4 projection;
             layout(location = 21) uniform mat4 modelView;
 
@@ -49,7 +48,7 @@ namespace DonutGame
         Matrix4 ModelViewMatrix;
 
         public Game() :
-            base(1280, 720, GraphicsMode.Default, "Plow Team", GameWindowFlags.Default)
+            base(1280, 720, new GraphicsMode(32, 24, 0, 8), "Plow Team", GameWindowFlags.Default)
         {
         }
 
