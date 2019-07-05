@@ -3,6 +3,7 @@ using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Input;
+using Vector3 = OpenTK.Vector3;
 
 namespace DonutGame
 {
@@ -28,16 +29,21 @@ namespace DonutGame
             out vec4 outputColor;
             void main(void)
             {
-                outputColor = vec4(1.0, 0.0, 0.0, 1.0);
+                outputColor = vec4(1.0, 1.0, 1.0, 1.0);
             }
         ";
 
         // Points of a triangle in normalized device coordinates.
-        readonly float[] Points = new float[] {
-            // X, Y, Z, W
-            -1.0f, -1.0f, 4.0f, 1.0f,
-            1.0f, -1.0f, 4.0f, 1.0f,
-            0.0f, 1.0f, 4.0f, 1.0f };
+        readonly float[] Points = new float[]
+        {
+            -0.5f, 0.0f, -0.5f, 1.0f,
+            0.5f, 0.0f, -0.5f, 1.0f,
+            0.5f, 0.0f, 0.5f, 1.0f,
+
+            0.5f, 0.0f, 0.5f, 1.0f,
+            -0.5f, 0.0f, 0.5f, 1.0f,
+            -0.5f, 0.0f, -0.5f, 1.0f
+        };
 
         int VertexShader;
         int FragmentShader;
@@ -55,6 +61,19 @@ namespace DonutGame
         {
             KeyDown += OnKeyDown;
             MouseMove += OnMouseMove;
+
+            MainCamera.Position = Vector3.UnitY * -10;
+
+            var file = new Pure3D.File();
+            file.Load("homer_m.p3d");
+            PrintHierarchy(file.RootChunk, 0);
+        }
+
+        static void PrintHierarchy(Pure3D.Chunk chunk, int indent)
+        {
+            Console.WriteLine("{1}{0}", chunk.ToString(), new String('\t', indent));
+            foreach (var child in chunk.Children)
+                PrintHierarchy(child, indent + 1);
         }
 
         protected override void OnLoad(EventArgs e)
@@ -93,19 +112,17 @@ namespace DonutGame
             GL.VertexAttribPointer(positionLocation, 4, VertexAttribPointerType.Float, false, 0, 0);
             GL.EnableVertexAttribArray(positionLocation);
 
-            GL.ClearColor(Color4.Yellow);
+            GL.ClearColor(Color4.Black);
         }
 
         protected override void OnUnload(EventArgs e)
         {
             base.OnUnload(e);
 
-            // Unbind all the resources by binding the targets to 0/null.
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.BindVertexArray(0);
             GL.UseProgram(0);
 
-            // Delete all the resources.
             GL.DeleteBuffer(VertexBufferObject);
             GL.DeleteVertexArray(VertexArrayObject);
             GL.DeleteProgram(ShaderProgram);
@@ -161,7 +178,9 @@ namespace DonutGame
             GL.UniformMatrix4(20, false, ref ProjectionMatrix);
             GL.UniformMatrix4(21, false, ref ModelViewMatrix);
 
-            GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+            GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
 
             SwapBuffers();
         }
