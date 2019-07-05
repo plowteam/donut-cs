@@ -9,7 +9,6 @@ namespace DonutGame
 {
     public class Game : GameWindow
     {
-        // A simple vertex shader possible. Just passes through the position vector.
         const string VertexShaderSource = @"
             #version 450 core
 
@@ -23,7 +22,6 @@ namespace DonutGame
             }
         ";
 
-        // A simple fragment shader. Just a constant red color.
         const string FragmentShaderSource = @"
             #version 450 core
             out vec4 outputColor;
@@ -33,22 +31,24 @@ namespace DonutGame
             }
         ";
 
-        // Points of a triangle in normalized device coordinates.
         readonly float[] Points = new float[]
         {
             -0.5f, 0.0f, -0.5f, 1.0f,
             0.5f, 0.0f, -0.5f, 1.0f,
             0.5f, 0.0f, 0.5f, 1.0f,
-
-            0.5f, 0.0f, 0.5f, 1.0f,
             -0.5f, 0.0f, 0.5f, 1.0f,
-            -0.5f, 0.0f, -0.5f, 1.0f
+        };
+
+        readonly uint[] Indices = new uint[]
+        {
+            0, 1, 2, 2, 3, 0
         };
 
         int VertexShader;
         int FragmentShader;
         int ShaderProgram;
         int VertexBufferObject;
+        int IndexBufferObject;
         int VertexArrayObject;
 
         Matrix4 ProjectionMatrix;
@@ -80,37 +80,32 @@ namespace DonutGame
         {
             base.OnLoad(e);
 
-            // Load the source of the vertex shader and compile it.
             VertexShader = GL.CreateShader(ShaderType.VertexShader);
             GL.ShaderSource(VertexShader, VertexShaderSource);
             GL.CompileShader(VertexShader);
 
-            // Load the source of the fragment shader and compile it.
             FragmentShader = GL.CreateShader(ShaderType.FragmentShader);
             GL.ShaderSource(FragmentShader, FragmentShaderSource);
             GL.CompileShader(FragmentShader);
 
-            // Create the shader program, attach the vertex and fragment shaders and link the program.
             ShaderProgram = GL.CreateProgram();
             GL.AttachShader(ShaderProgram, VertexShader);
             GL.AttachShader(ShaderProgram, FragmentShader);
             GL.LinkProgram(ShaderProgram);
 
-            // Create the vertex buffer object (VBO) for the vertex data.
             VertexBufferObject = GL.GenBuffer();
-            // Bind the VBO and copy the vertex data into it.
+            IndexBufferObject = GL.GenBuffer();
+
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             GL.BufferData(BufferTarget.ArrayBuffer, Points.Length * sizeof(float), Points, BufferUsageHint.StaticDraw);
 
-            // Retrive the position location from the program.
-            var positionLocation = GL.GetAttribLocation(ShaderProgram, "position");
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, Indices.Length * sizeof(uint), Indices, BufferUsageHint.StaticDraw);
 
-            // Create the vertex array object (VAO) for the program.
             VertexArrayObject = GL.GenVertexArray();
-            // Bind the VAO and setup the position attribute.
             GL.BindVertexArray(VertexArrayObject);
-            GL.VertexAttribPointer(positionLocation, 4, VertexAttribPointerType.Float, false, 0, 0);
-            GL.EnableVertexAttribArray(positionLocation);
+            GL.VertexAttribPointer(0, 4, VertexAttribPointerType.Float, false, 0, 0);
+            GL.EnableVertexAttribArray(0);
 
             GL.ClearColor(Color4.Black);
         }
@@ -120,10 +115,12 @@ namespace DonutGame
             base.OnUnload(e);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
             GL.BindVertexArray(0);
             GL.UseProgram(0);
 
             GL.DeleteBuffer(VertexBufferObject);
+            GL.DeleteBuffer(IndexBufferObject);
             GL.DeleteVertexArray(VertexArrayObject);
             GL.DeleteProgram(ShaderProgram);
             GL.DeleteShader(FragmentShader);
@@ -167,6 +164,7 @@ namespace DonutGame
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
             GL.BindVertexArray(VertexArrayObject);
 
             var viewMatrix = MainCamera.ViewMatrix;
@@ -179,7 +177,7 @@ namespace DonutGame
             GL.UniformMatrix4(21, false, ref ModelViewMatrix);
 
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+            GL.DrawElements(PrimitiveType.Triangles, Indices.Length, DrawElementsType.UnsignedInt, 0);
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
 
             SwapBuffers();
