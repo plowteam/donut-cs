@@ -9,17 +9,22 @@ namespace DonutGame
     {
         // A simple vertex shader possible. Just passes through the position vector.
         const string VertexShaderSource = @"
-            #version 330
+            #version 450 core
+
             layout(location = 0) in vec4 position;
+
+            layout(location = 20) uniform mat4 projection;
+            layout(location = 21) uniform mat4 modelView;
+
             void main(void)
             {
-                gl_Position = position;
+                gl_Position = projection * modelView * position;
             }
         ";
 
         // A simple fragment shader. Just a constant red color.
         const string FragmentShaderSource = @"
-            #version 330
+            #version 450 core
             out vec4 outputColor;
             void main(void)
             {
@@ -30,15 +35,18 @@ namespace DonutGame
         // Points of a triangle in normalized device coordinates.
         readonly float[] Points = new float[] {
             // X, Y, Z, W
-            -0.5f, 0.0f, 0.0f, 1.0f,
-            0.5f, 0.0f, 0.0f, 1.0f,
-            0.0f, 0.5f, 0.0f, 1.0f };
+            -1.0f, -1.0f, 4.0f, 1.0f,
+            1.0f, -1.0f, 4.0f, 1.0f,
+            0.0f, 1.0f, 4.0f, 1.0f };
 
         int VertexShader;
         int FragmentShader;
         int ShaderProgram;
         int VertexBufferObject;
         int VertexArrayObject;
+
+        Matrix4 ProjectionMatrix;
+        Matrix4 ModelViewMatrix;
 
         public Game() :
             base(1280, 720, GraphicsMode.Default, "Plow Team", GameWindowFlags.Default)
@@ -106,6 +114,9 @@ namespace DonutGame
             base.OnResize(e);
 
             GL.Viewport(0, 0, Width, Height);
+
+            var aspectRatio = (float)Width / Height;
+            ProjectionMatrix = Matrix4.CreatePerspectiveFieldOfView(60 * ((float)Math.PI / 180f), aspectRatio, 0.1f, 4000f);
         }
 
         protected override void OnRenderFrame(FrameEventArgs e)
@@ -114,13 +125,15 @@ namespace DonutGame
 
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-            // Bind the VBO
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
-            // Bind the VAO
             GL.BindVertexArray(VertexArrayObject);
-            // Use/Bind the program
+
+            ModelViewMatrix = Matrix4.LookAt(Vector3.Zero, Vector3.UnitZ, Vector3.UnitY);
+
             GL.UseProgram(ShaderProgram);
-            // This draws the triangle.
+            GL.UniformMatrix4(20, false, ref ProjectionMatrix);
+            GL.UniformMatrix4(21, false, ref ModelViewMatrix);
+
             GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
 
             SwapBuffers();
