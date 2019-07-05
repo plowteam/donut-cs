@@ -2,6 +2,7 @@
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
+using OpenTK.Input;
 
 namespace DonutGame
 {
@@ -50,6 +51,8 @@ namespace DonutGame
         public Game() :
             base(1280, 720, new GraphicsMode(32, 24, 0, 8), "Plow Team", GameWindowFlags.Default)
         {
+            KeyDown += OnKeyDown;
+            MouseMove += OnMouseMove;
         }
 
         protected override void OnLoad(EventArgs e)
@@ -136,6 +139,19 @@ namespace DonutGame
             GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
 
             SwapBuffers();
+        }
+
+        private void OnKeyDown(object sender, KeyboardKeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                Exit();
+            }
+        }
+
+        private void OnMouseMove(object sender, MouseMoveEventArgs e)
+        {
+            Console.WriteLine($"{e.XDelta}, {e.YDelta}");
         }
     }
 
