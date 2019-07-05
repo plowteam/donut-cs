@@ -12,32 +12,65 @@ namespace DonutGame
         const string VertexShaderSource = @"
             #version 450 core
 
-            layout(location = 0) in vec4 position;
+            layout(location = 0) in vec3 position;
+            layout(location = 1) in vec3 normal;
+            layout(location = 2) in vec2 texCoord0;
+            layout(location = 3) in vec4 color;
             layout(location = 20) uniform mat4 projection;
             layout(location = 21) uniform mat4 modelView;
 
+            out vec4 vertexColor;
+
             void main(void)
             {
-                gl_Position = projection * modelView * position;
+                vertexColor = color;
+                gl_Position = projection * modelView * vec4(position.xyz, 1.0);
             }
         ";
 
         const string FragmentShaderSource = @"
             #version 450 core
+            in vec4 vertexColor;
             out vec4 outputColor;
             void main(void)
             {
-                outputColor = vec4(1.0, 1.0, 1.0, 1.0);
+                outputColor = vertexColor;
             }
         ";
 
-        readonly float[] Points = new float[]
+        readonly Vertex[] Vertices = new Vertex[]
         {
-            -0.5f, 0.0f, -0.5f, 1.0f,
-            0.5f, 0.0f, -0.5f, 1.0f,
-            0.5f, 0.0f, 0.5f, 1.0f,
-            -0.5f, 0.0f, 0.5f, 1.0f,
+            new Vertex(new Vector3(-0.5f, 0.0f, -0.5f), Color4.Red),
+            new Vertex(new Vector3(0.5f, 0.0f, -0.5f), Color4.Green),
+            new Vertex(new Vector3(0.5f, 0.0f, 0.5f), Color4.Blue),
+            new Vertex(new Vector3(-0.5f, 0.0f, 0.5f), Color4.Yellow),
         };
+
+        struct Vertex
+        {
+            public Vector3 Position;
+            public Vector3 Normal;
+            public Vector2 TexCoord0;
+            public Color4 Color;
+
+            public static readonly int SizeOf = 48;
+
+            public Vertex(Vector3 position)
+            {
+                Position = position;
+                Normal = Vector3.Zero;
+                TexCoord0 = Vector2.Zero;
+                Color = Color4.White;
+            }
+
+            public Vertex(Vector3 position, Color4 color)
+            {
+                Position = position;
+                Normal = Vector3.Zero;
+                TexCoord0 = Vector2.Zero;
+                Color = color;
+            }
+        }
 
         readonly uint[] Indices = new uint[]
         {
@@ -97,15 +130,21 @@ namespace DonutGame
             IndexBufferObject = GL.GenBuffer();
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
-            GL.BufferData(BufferTarget.ArrayBuffer, Points.Length * sizeof(float), Points, BufferUsageHint.StaticDraw);
+            GL.BufferData(BufferTarget.ArrayBuffer, Vertices.Length * Vertex.SizeOf, Vertices, BufferUsageHint.StaticDraw);
 
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
             GL.BufferData(BufferTarget.ElementArrayBuffer, Indices.Length * sizeof(uint), Indices, BufferUsageHint.StaticDraw);
 
             VertexArrayObject = GL.GenVertexArray();
             GL.BindVertexArray(VertexArrayObject);
-            GL.VertexAttribPointer(0, 4, VertexAttribPointerType.Float, false, 0, 0);
+            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, Vertex.SizeOf, 0); // Position
+            GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, Vertex.SizeOf, 12); // Normal
+            GL.VertexAttribPointer(2, 2, VertexAttribPointerType.Float, false, Vertex.SizeOf, 24); // TexCoord0
+            GL.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, Vertex.SizeOf, 32); // Color
             GL.EnableVertexAttribArray(0);
+            GL.EnableVertexAttribArray(1);
+            GL.EnableVertexAttribArray(2);
+            GL.EnableVertexAttribArray(3);
 
             GL.ClearColor(Color4.Black);
         }
