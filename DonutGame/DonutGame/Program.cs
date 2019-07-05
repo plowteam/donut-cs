@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
@@ -38,13 +40,18 @@ namespace DonutGame
             }
         ";
 
-        readonly Vertex[] Vertices = new Vertex[]
-        {
-            new Vertex(new Vector3(-0.5f, 0.0f, -0.5f), Color4.Red),
-            new Vertex(new Vector3(0.5f, 0.0f, -0.5f), Color4.Green),
-            new Vertex(new Vector3(0.5f, 0.0f, 0.5f), Color4.Blue),
-            new Vertex(new Vector3(-0.5f, 0.0f, 0.5f), Color4.Yellow),
-        };
+        //readonly Vertex[] Vertices = new Vertex[]
+        //{
+        //    new Vertex(new Vector3(-0.5f, 0.0f, -0.5f), Color4.Red),
+        //    new Vertex(new Vector3(0.5f, 0.0f, -0.5f), Color4.Green),
+        //    new Vertex(new Vector3(0.5f, 0.0f, 0.5f), Color4.Blue),
+        //    new Vertex(new Vector3(-0.5f, 0.0f, 0.5f), Color4.Yellow),
+        //};
+
+        //readonly uint[] Indices = new uint[]
+        //{
+        //    0, 1, 2, 2, 3, 0
+        //};
 
         struct Vertex
         {
@@ -72,10 +79,11 @@ namespace DonutGame
             }
         }
 
-        readonly uint[] Indices = new uint[]
+        class Model
         {
-            0, 1, 2, 2, 3, 0
-        };
+            public List<Vertex> Vertices = new List<Vertex>();
+            public List<uint> Indices = new List<uint>();
+        }
 
         int VertexShader;
         int FragmentShader;
@@ -88,6 +96,7 @@ namespace DonutGame
         Matrix4 ModelViewMatrix;
 
         Camera MainCamera = new Camera();
+        readonly Model HomerModel = null;
 
         public Game() :
             base(1280, 720, new GraphicsMode(32, 24, 0, 8), "Plow Team", GameWindowFlags.Default)
@@ -97,9 +106,7 @@ namespace DonutGame
 
             MainCamera.Position = Vector3.UnitY * -10;
 
-            var file = new Pure3D.File();
-            file.Load("homer_m.p3d");
-            PrintHierarchy(file.RootChunk, 0);
+            HomerModel = LoadModel("homer_m.p3d");
         }
 
         static void PrintHierarchy(Pure3D.Chunk chunk, int indent)
@@ -107,6 +114,103 @@ namespace DonutGame
             Console.WriteLine("{1}{0}", chunk.ToString(), new String('\t', indent));
             foreach (var child in chunk.Children)
                 PrintHierarchy(child, indent + 1);
+        }
+
+        private static Vector3 ConvertVector(Pure3D.Vector3 v)
+        {
+            return new Vector3(v.X, v.Y, v.Z);
+        }
+
+        private static Vector2 ConvertVector(Pure3D.Vector2 v)
+        {
+            return new Vector2(v.X, v.Y);
+        }
+
+        private Model LoadModel(string path)
+        {
+            var file = new Pure3D.File();
+            file.Load("homer_m.p3d");
+            PrintHierarchy(file.RootChunk, 0);
+
+            var model = new Model();
+
+            var rootChunk = file.RootChunk;
+            var meshChunks = rootChunk.GetChildren<Pure3D.Chunks.Mesh>();
+
+            foreach (var meshChunk in meshChunks)
+            {
+                var primChunks = meshChunk.GetChildren<Pure3D.Chunks.PrimitiveGroup>();
+
+                foreach (var primChunk in primChunks)
+                {
+                    if (primChunk.PrimitiveType == Pure3D.Chunks.PrimitiveGroup.PrimitiveTypes.LineList ||
+                        primChunk.PrimitiveType == Pure3D.Chunks.PrimitiveGroup.PrimitiveTypes.LineStrip)
+                    {
+                        continue;
+                    }
+
+                    var positionChunk = primChunk.GetChildren<Pure3D.Chunks.PositionList>().FirstOrDefault();
+                    var packedNormalChunk = primChunk.GetChildren<Pure3D.Chunks.PackedNormalList>().FirstOrDefault();
+                    var normalChunk = primChunk.GetChildren<Pure3D.Chunks.NormalList>().FirstOrDefault();
+                    var uvChunk = primChunk.GetChildren<Pure3D.Chunks.UVList>().FirstOrDefault();
+                    var indicesChunk = primChunk.GetChildren<Pure3D.Chunks.IndexList>().FirstOrDefault();
+                    var matricesChunk = primChunk.GetChildren<Pure3D.Chunks.MatrixList>().FirstOrDefault();
+                    var matrixPaletteChunk = primChunk.GetChildren<Pure3D.Chunks.MatrixPalette>().FirstOrDefault();
+                    var shaderChunk = rootChunk.GetChildrenByName<Pure3D.Chunks.Shader>(primChunk.ShaderName).FirstOrDefault();
+                    var textureParameterChunk = shaderChunk.GetChildren<Pure3D.Chunks.ShaderTextureParam>().FirstOrDefault();
+
+                    var vertexOffset = (uint)model.Vertices.Count;
+
+                    model.Vertices.AddRange(Enumerable.Range(0, (int)primChunk.NumVertices).Select(i =>
+                    {
+                        var position = ConvertVector(positionChunk.Positions[i]);
+                        var normal = ConvertVector(normalChunk.Normals[i]);
+                        var uv = new Vector2(uvChunk.UVs[i].X, 1.0f - uvChunk.UVs[i].Y);
+
+                        return new Vertex
+                        {
+                            Position = position,
+                            Normal = normal,
+                            TexCoord0 = uv,
+                            Color = Color4.Pink
+                        };
+                    }));
+
+                    if (primChunk.PrimitiveType == Pure3D.Chunks.PrimitiveGroup.PrimitiveTypes.TriangleList)
+                    {
+                        model.Indices.AddRange(indicesChunk.Indices.Select(x => vertexOffset + x));
+                        //model.Indices.AddRange(indicesChunk.Indices.Reverse().Select(x => vertexOffset + x));
+                    }
+                    else if (primChunk.PrimitiveType == Pure3D.Chunks.PrimitiveGroup.PrimitiveTypes.TriangleStrip)
+                    {
+                        for (var i = 0; i < primChunk.NumIndices - 2; ++i)
+                        {
+                            if (i % 2 == 0)
+                            {
+                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i]);
+                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 1]);
+                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 2]);
+
+                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 2]);
+                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 1]);
+                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i]);
+                            }
+                            else
+                            {
+                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i]);
+                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 2]);
+                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 1]);
+
+                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 1]);
+                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 2]);
+                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return model;
         }
 
         protected override void OnLoad(EventArgs e)
@@ -130,10 +234,10 @@ namespace DonutGame
             IndexBufferObject = GL.GenBuffer();
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
-            GL.BufferData(BufferTarget.ArrayBuffer, Vertices.Length * Vertex.SizeOf, Vertices, BufferUsageHint.StaticDraw);
+            GL.BufferData(BufferTarget.ArrayBuffer, HomerModel.Vertices.Count * Vertex.SizeOf, HomerModel.Vertices.ToArray(), BufferUsageHint.StaticDraw);
 
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, Indices.Length * sizeof(uint), Indices, BufferUsageHint.StaticDraw);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, HomerModel.Indices.Count * sizeof(uint), HomerModel.Indices.ToArray(), BufferUsageHint.StaticDraw);
 
             VertexArrayObject = GL.GenVertexArray();
             GL.BindVertexArray(VertexArrayObject);
@@ -194,7 +298,11 @@ namespace DonutGame
             MainCamera.UpdateRotationQuat();
             MainCamera.Move(inputForce, dt);
             MainCamera.UpdateViewMatrix();
+
+            //Rot += 1.0f * dt;
         }
+
+        float Rot = 0;
 
         protected override void OnRenderFrame(FrameEventArgs e)
         {
@@ -207,7 +315,7 @@ namespace DonutGame
             GL.BindVertexArray(VertexArrayObject);
 
             var viewMatrix = MainCamera.ViewMatrix;
-            var modelMatrix = Matrix4.CreateTranslation(Vector3.Zero);
+            var modelMatrix = Matrix4.CreateRotationY(Rot);
 
             ModelViewMatrix = modelMatrix * viewMatrix;
 
@@ -216,7 +324,7 @@ namespace DonutGame
             GL.UniformMatrix4(21, false, ref ModelViewMatrix);
 
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
-            GL.DrawElements(PrimitiveType.Triangles, Indices.Length, DrawElementsType.UnsignedInt, 0);
+            GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
 
             SwapBuffers();
