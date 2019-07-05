@@ -48,6 +48,8 @@ namespace DonutGame
         Matrix4 ProjectionMatrix;
         Matrix4 ModelViewMatrix;
 
+        Camera MainCamera = new Camera();
+
         public Game() :
             base(1280, 720, new GraphicsMode(32, 24, 0, 8), "Plow Team", GameWindowFlags.Default)
         {
@@ -118,7 +120,27 @@ namespace DonutGame
             GL.Viewport(0, 0, Width, Height);
 
             var aspectRatio = (float)Width / Height;
-            ProjectionMatrix = Matrix4.CreatePerspectiveFieldOfView(60 * ((float)Math.PI / 180f), aspectRatio, 0.1f, 4000f);
+            ProjectionMatrix = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(40), aspectRatio, 0.1f, 4000f);
+        }
+
+        protected override void OnUpdateFrame(FrameEventArgs e)
+        {
+            var dt = (float)e.Time;
+
+            var keyState = Keyboard.GetState();
+
+            var inputForce = Vector3.Zero;
+            if (keyState.IsKeyDown(Key.W)) inputForce += Vector3.UnitZ;
+            if (keyState.IsKeyDown(Key.S)) inputForce -= Vector3.UnitZ;
+            if (keyState.IsKeyDown(Key.A)) inputForce += Vector3.UnitX;
+            if (keyState.IsKeyDown(Key.D)) inputForce -= Vector3.UnitX;
+            inputForce.Normalize();
+
+            inputForce *= keyState.IsKeyDown(Key.ShiftLeft) ? 10.0f : 2.0f;
+
+            MainCamera.UpdateRotationQuat();
+            MainCamera.Move(inputForce, dt);
+            MainCamera.UpdateViewMatrix();
         }
 
         protected override void OnRenderFrame(FrameEventArgs e)
@@ -130,7 +152,10 @@ namespace DonutGame
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             GL.BindVertexArray(VertexArrayObject);
 
-            ModelViewMatrix = Matrix4.LookAt(Vector3.Zero, Vector3.UnitZ, Vector3.UnitY);
+            var viewMatrix = MainCamera.ViewMatrix;
+            var modelMatrix = Matrix4.CreateTranslation(Vector3.Zero);
+
+            ModelViewMatrix = modelMatrix * viewMatrix;
 
             GL.UseProgram(ShaderProgram);
             GL.UniformMatrix4(20, false, ref ProjectionMatrix);
@@ -151,7 +176,10 @@ namespace DonutGame
 
         private void OnMouseMove(object sender, MouseMoveEventArgs e)
         {
-            Console.WriteLine($"{e.XDelta}, {e.YDelta}");
+            var xDelta = e.XDelta * 0.5f;
+            var yDelta = e.YDelta * 0.5f;
+
+            MainCamera.LookDelta(xDelta, yDelta);
         }
     }
 
