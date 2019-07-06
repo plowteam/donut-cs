@@ -5,7 +5,7 @@ namespace DonutGame
 {
     class Animation
     {
-        public class ValueKey<T> where T : struct
+        public abstract class ValueKey<T> where T : struct
         {
             public float Key;
             public T Value;
@@ -27,6 +27,11 @@ namespace DonutGame
             public VectorKey(float key, Vector3 value) : base(key, value)
             {
             }
+
+            public override Vector3 Lerp(Vector3 next, float fraction)
+            {
+                return Vector3.Lerp(Value, next, fraction);
+            }
         }
 
         public class QuaternionKey : ValueKey<Quaternion>
@@ -45,20 +50,29 @@ namespace DonutGame
         {
             private List<ValueKey<T>> KeyValues = new List<ValueKey<T>>();
 
-            public void Add(float key, T value = default(T))
+            public void Add(float key, T value = default)
             {
-                KeyValues.Add(new ValueKey<T>(key, value));
+                if (value is Vector3 v)
+                {
+                    KeyValues.Add(new VectorKey(key, v) as ValueKey<T>);
+                }
+                else if (value is Quaternion q)
+                {
+                    KeyValues.Add(new QuaternionKey(key, q) as ValueKey<T>);
+                }
             }
 
-            public T Evalulate(float time, T defaultValue = default(T))
+            public T Evalulate(float time, T defaultValue = default)
             {
                 var count = KeyValues.Count;
                 if (count == 0) return defaultValue;
 
+                var lastIndex = KeyValues.Count - 1;
+                time = time % KeyValues[lastIndex].Key;
+
                 var index = GetKeyValueIndex(time);
                 if (index == -1) return KeyValues[0].Value;
 
-                var lastIndex = KeyValues.Count - 1;
                 if (index == lastIndex)
                 {
                     return KeyValues[lastIndex].Value;

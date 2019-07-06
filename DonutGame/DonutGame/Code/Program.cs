@@ -156,19 +156,19 @@ namespace DonutGame
                 model.Bones[index] = bone;
             }
 
-            foreach (var bone in model.Bones)
-            {
-                var boneParent = model.Bones[bone.Parent];
-                var a = bone.Transform.ExtractTranslation() + Vector3.UnitX * 2;
-                var b = boneParent.Transform.ExtractTranslation() + Vector3.UnitX * 2;
+            //foreach (var bone in model.Bones)
+            //{
+            //    var boneParent = model.Bones[bone.Parent];
+            //    var a = bone.Transform.ExtractTranslation() + Vector3.UnitX * 2;
+            //    var b = boneParent.Transform.ExtractTranslation() + Vector3.UnitX * 2;
 
-                var vertexOffset = (uint)model.Vertices.Count;
-                model.Vertices.Add(new Vertex(a));
-                model.Vertices.Add(new Vertex(b));
-                model.Indices.Add(vertexOffset);
-                model.Indices.Add(vertexOffset + 1);
-                model.Indices.Add(vertexOffset);
-            }
+            //    var vertexOffset = (uint)model.Vertices.Count;
+            //    model.Vertices.Add(new Vertex(a));
+            //    model.Vertices.Add(new Vertex(b));
+            //    model.Indices.Add(vertexOffset);
+            //    model.Indices.Add(vertexOffset + 1);
+            //    model.Indices.Add(vertexOffset);
+            //}
 
             foreach (var meshChunk in meshChunks)
             {
@@ -367,9 +367,9 @@ namespace DonutGame
             return anim;
         }
 
-        private void UpdateAnimation(float time)
+        private void UpdateAnimation(int animIndex, float time)
         {
-            var animation = HomerModel.Animations[0];
+            var animation = HomerModel.Animations[animIndex % HomerModel.Animations.Count];
             var poseMatrices = new Matrix4[HomerModel.Bones.Count];
             poseMatrices[0] = animation.Tracks[0].Evalulate(time);
 
@@ -419,7 +419,7 @@ namespace DonutGame
             TextureBufferObject = GL.GenBuffer();
             Texture = GL.GenTexture();
 
-            UpdateAnimation(0.0f);
+            UpdateAnimation(AnimIndex, 0.0f);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             GL.BufferData(BufferTarget.ArrayBuffer, HomerModel.Vertices.Count * Vertex.SizeOf, HomerModel.Vertices.ToArray(), BufferUsageHint.StaticDraw);
@@ -477,6 +477,7 @@ namespace DonutGame
         }
 
         float AnimTime = 0;
+        int AnimIndex = 19;
 
         protected override void OnUpdateFrame(FrameEventArgs e)
         {
@@ -497,8 +498,9 @@ namespace DonutGame
             MainCamera.Move(inputForce, dt);
             MainCamera.UpdateViewMatrix();
 
-            AnimTime += dt * 1.0f;
-            UpdateAnimation(AnimTime);
+            var anim = HomerModel.Animations[AnimIndex % HomerModel.Animations.Count];
+            AnimTime += dt * (anim.FrameCount / anim.Length);
+            UpdateAnimation(AnimIndex, AnimTime);
         }
 
         protected override void OnRenderFrame(FrameEventArgs e)
@@ -551,6 +553,11 @@ namespace DonutGame
             if (e.Key == Key.Escape)
             {
                 Exit();
+            }
+            else if (e.Key == Key.Right)
+            {
+                AnimIndex++;
+                Console.WriteLine($"{AnimIndex}");
             }
         }
 
