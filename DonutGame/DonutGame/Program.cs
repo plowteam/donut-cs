@@ -120,10 +120,17 @@ namespace DonutGame
             }
         }
 
+        struct Bone
+        {
+            public Matrix4 Transform;
+            public int Parent;
+        }
+
         class Model
         {
             public List<Vertex> Vertices = new List<Vertex>();
             public List<uint> Indices = new List<uint>();
+            public List<Bone> Bones = new List<Bone>();
         }
 
         int VertexShader;
@@ -169,6 +176,15 @@ namespace DonutGame
             return new Vector2(v.X, v.Y);
         }
 
+        protected static Matrix4 ConvertMatrix(Pure3D.Matrix m)
+        {
+            return new Matrix4(
+                m.M11, m.M12, m.M13, m.M14,
+                m.M21, m.M22, m.M23, m.M24,
+                m.M31, m.M32, m.M33, m.M34,
+                m.M41, m.M42, m.M43, m.M44);
+        }
+
         private Model LoadModel(string path)
         {
             var file = new Pure3D.File();
@@ -185,7 +201,14 @@ namespace DonutGame
             for (var i = 0; i < jointChunks.Length; ++i)
             {
                 var jointChunk = jointChunks[i];
+                var boneMatrix = ConvertMatrix(jointChunk.RestPose);
                 Console.WriteLine($"{i} {jointChunk.Name}");
+
+                model.Bones.Add(new Bone
+                {
+                    Transform = boneMatrix,
+                    Parent = (int)jointChunk.SkeletonParent,
+                });
             }
 
             foreach (var meshChunk in meshChunks)
