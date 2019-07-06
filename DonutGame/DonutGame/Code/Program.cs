@@ -285,6 +285,8 @@ namespace DonutGame
                 Name = animChunk.Name,
             };
 
+            Console.WriteLine(anim.Name);
+
             model.Animations.Add(anim);
 
             anim.FrameCount = (int)animChunk.NumberOfFrames;
@@ -299,14 +301,11 @@ namespace DonutGame
             {
                 var animTrack = anim.Tracks[trackIndex];
                 var bone = model.Bones[trackIndex];
-                var animGroupChunk = animGroupChunks.Where(x => x.Name == animTrack.Name).FirstOrDefault();
+                Pure3D.Chunks.AnimationGroup animGroupChunk = animGroupChunks.Where(x => x.Name == animTrack.Name).FirstOrDefault();
 
                 var boneTransform = bone.Transform;
-
-                if (bone.Parent > -1)
-                {
-                    boneTransform *= model.Bones[bone.Parent].Transform.Inverted();
-                }
+                animTrack.T = boneTransform;
+                boneTransform *= model.Bones[bone.Parent].Transform.Inverted();
 
                 if (animGroupChunk == null)
                 {
@@ -429,14 +428,24 @@ namespace DonutGame
             TextureBufferObject = GL.GenBuffer();
             Texture = GL.GenTexture();
 
+            var animation = HomerModel.Animations[0];
+            var poseMatrices = new Matrix4[HomerModel.Bones.Count];
+            poseMatrices[0] = animation.Tracks[0].Transform();
+
+            for (var index = 0; index < poseMatrices.Length; ++index)
+            {
+                var bone = HomerModel.Bones[index];
+                var boneParent = bone.Parent;
+
+                poseMatrices[index] = animation.Tracks[index].Transform() * poseMatrices[boneParent];
+            }
+
             var boneMatrices = new Matrix4[HomerModel.Bones.Count];
             for (var i = 0; i < boneMatrices.Length; ++i)
             {
                 var boneMatrix = HomerModel.Bones[i].Transform;
-                boneMatrices[i] = Matrix4.Identity;// boneMatrix.Inverted() * HomerModel.Bones[i].Pose;
+                boneMatrices[i] = (boneMatrix.Inverted() * poseMatrices[i]);
             }
-            //boneMatrices[17] = Matrix4.CreateTranslation(Vector3.UnitY * 0.2f);
-            //boneMatrices[18] = Matrix4.CreateTranslation(Vector3.UnitY * 0.2f);
 
             GL.BindBuffer(BufferTarget.TextureBuffer, TextureBufferObject);
             GL.BufferData(BufferTarget.TextureBuffer, boneMatrices.Length * 64, boneMatrices, BufferUsageHint.StaticDraw);

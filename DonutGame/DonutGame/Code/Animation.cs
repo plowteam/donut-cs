@@ -27,6 +27,12 @@ namespace DonutGame
             public List<VectorKey> PositionKeys { get; } = new List<VectorKey>();
             public List<QuaternionKey> RotationKeys { get; } = new List<QuaternionKey>();
             public List<VectorKey> ScaleKeys { get; } = new List<VectorKey>();
+
+            public Matrix4 T;
+            public Matrix4 Transform()
+            {
+                return Matrix4.CreateFromQuaternion(RotationKeys[0].Value) * Matrix4.CreateTranslation(PositionKeys[0].Value);
+            }
         }
 
         public string Name { get; set; }
