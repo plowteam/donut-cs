@@ -20,13 +20,17 @@ namespace DonutGame
             layout(location = 3) in vec4 color;
             layout(location = 20) uniform mat4 projection;
             layout(location = 21) uniform mat4 modelView;
+            layout(location = 22) uniform vec4 tint;
+            layout(location = 23) uniform float zOffset;
 
             out vec4 vertexColor;
 
             void main(void)
             {
-                vertexColor = color;
-                gl_Position = projection * modelView * vec4(position.xyz, 1.0);
+                vertexColor = color * tint;
+                vec4 v = modelView * vec4(position.xyz, 1.0);
+                v.w -= zOffset;
+                gl_Position = projection * v;
             }
         ";
 
@@ -172,14 +176,13 @@ namespace DonutGame
                             Position = position,
                             Normal = normal,
                             TexCoord0 = uv,
-                            Color = Color4.Pink
+                            Color = Color4.White
                         };
                     }));
 
                     if (primChunk.PrimitiveType == Pure3D.Chunks.PrimitiveGroup.PrimitiveTypes.TriangleList)
                     {
                         model.Indices.AddRange(indicesChunk.Indices.Select(x => vertexOffset + x));
-                        //model.Indices.AddRange(indicesChunk.Indices.Reverse().Select(x => vertexOffset + x));
                     }
                     else if (primChunk.PrimitiveType == Pure3D.Chunks.PrimitiveGroup.PrimitiveTypes.TriangleStrip)
                     {
@@ -187,23 +190,35 @@ namespace DonutGame
                         {
                             if (i % 2 == 0)
                             {
-                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i]);
-                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 1]);
-                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 2]);
+                                var a = vertexOffset + indicesChunk.Indices[i];
+                                var b = vertexOffset + indicesChunk.Indices[i + 1];
+                                var c = vertexOffset + indicesChunk.Indices[i + 2];
 
-                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 2]);
-                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 1]);
-                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i]);
+                                if (a == b || b == c || c == a)
+                                {
+                                    Console.WriteLine("DEGENERATE TRIANGLE!");
+                                    continue;
+                                }
+
+                                model.Indices.Add(a);
+                                model.Indices.Add(b);
+                                model.Indices.Add(c);
                             }
                             else
                             {
-                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i]);
-                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 2]);
-                                model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 1]);
+                                var a = vertexOffset + indicesChunk.Indices[i];
+                                var b = vertexOffset + indicesChunk.Indices[i + 2];
+                                var c = vertexOffset + indicesChunk.Indices[i + 1];
 
-                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 1]);
-                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i + 2]);
-                                //model.Indices.Add(vertexOffset + indicesChunk.Indices[i]);
+                                if (a == b || b == c || c == a)
+                                {
+                                    Console.WriteLine("DEGENERATE TRIANGLE!");
+                                    continue;
+                                }
+
+                                model.Indices.Add(a);
+                                model.Indices.Add(b);
+                                model.Indices.Add(c);
                             }
                         }
                     }
@@ -308,6 +323,10 @@ namespace DonutGame
         {
             base.OnRenderFrame(e);
 
+            GL.Enable(EnableCap.DepthTest);
+            GL.DepthMask(true);
+            GL.DepthFunc(DepthFunction.Lequal);
+
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
@@ -323,6 +342,12 @@ namespace DonutGame
             GL.UniformMatrix4(20, false, ref ProjectionMatrix);
             GL.UniformMatrix4(21, false, ref ModelViewMatrix);
 
+            GL.Uniform4(22, 0.25f, 0.25f, 0.25f, 1.0f);
+            GL.Uniform1(23, 0.001f);
+            GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);
+
+            GL.Uniform4(22, 0.0f, 1.0f, 1.0f, 1.0f);
+            GL.Uniform1(23, 0.0f);
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
             GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
