@@ -62,77 +62,6 @@ namespace DonutGame
             }
         ";
 
-        [StructLayout(LayoutKind.Sequential)]
-        struct Vector4i
-        {
-            public int X;
-            public int Y;
-            public int Z;
-            public int W;
-
-            public Vector4i(int x, int y, int z, int w)
-            {
-                X = x;
-                Y = y;
-                Z = z;
-                W = w;
-            }
-
-            public Vector4i(int v)
-            {
-                X = v;
-                Y = v;
-                Z = v;
-                W = v;
-            }
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        struct Vertex
-        {
-            public Vector3 Position;
-            public Vector3 Normal;
-            public Vector2 TexCoord0;
-            public Color4 Color;
-            public Vector4 BoneWeights;
-            public int BoneIndex;
-
-            public static readonly int SizeOf = 68;
-
-            public Vertex(Vector3 position)
-            {
-                Position = position;
-                Normal = Vector3.Zero;
-                TexCoord0 = Vector2.Zero;
-                Color = Color4.White;
-                BoneWeights = Vector4.Zero;
-                BoneIndex = 0;
-            }
-
-            public Vertex(Vector3 position, Color4 color)
-            {
-                Position = position;
-                Normal = Vector3.Zero;
-                TexCoord0 = Vector2.Zero;
-                Color = color;
-                BoneWeights = Vector4.Zero;
-                BoneIndex = 0;
-            }
-        }
-
-        struct Bone
-        {
-            public Matrix4 Transform;
-            public int Parent;
-        }
-
-        class Model
-        {
-            public List<Vertex> Vertices = new List<Vertex>();
-            public List<uint> Indices = new List<uint>();
-            public List<Bone> Bones = new List<Bone>();
-        }
-
         int VertexShader;
         int FragmentShader;
         int ShaderProgram;
@@ -422,11 +351,7 @@ namespace DonutGame
             MainCamera.UpdateRotationQuat();
             MainCamera.Move(inputForce, dt);
             MainCamera.UpdateViewMatrix();
-
-            //Rot += 1.0f * dt;
         }
-
-        float Rot = 0;
 
         protected override void OnRenderFrame(FrameEventArgs e)
         {
@@ -446,7 +371,7 @@ namespace DonutGame
             GL.BindVertexArray(VertexArrayObject);
 
             var viewMatrix = MainCamera.ViewMatrix;
-            var modelMatrix = Matrix4.CreateRotationY(Rot);
+            var modelMatrix = Matrix4.CreateRotationY(0);
 
             ModelViewMatrix = modelMatrix * viewMatrix;
 
