@@ -23,7 +23,7 @@ namespace DonutGame
             Normal = Vector3.Zero;
             TexCoord0 = Vector2.Zero;
             Color = Color4.White;
-            BoneWeights = Vector4.Zero;
+            BoneWeights = Vector4.One;
             BoneIndex = 0;
         }
 
@@ -33,14 +33,16 @@ namespace DonutGame
             Normal = Vector3.Zero;
             TexCoord0 = Vector2.Zero;
             Color = color;
-            BoneWeights = Vector4.Zero;
+            BoneWeights = Vector4.One;
             BoneIndex = 0;
         }
     }
 
     struct Bone
     {
+        public string Name;
         public Matrix4 Transform;
+        public Matrix4 Pose;
         public int Parent;
     }
 
@@ -49,5 +51,6 @@ namespace DonutGame
         public List<Vertex> Vertices = new List<Vertex>();
         public List<uint> Indices = new List<uint>();
         public List<Bone> Bones = new List<Bone>();
+        public List<Animation> Animations = new List<Animation>();
     }
 }

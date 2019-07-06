@@ -47,6 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Code\Camera.cs" />
+    <Compile Include="Code\Animation.cs" />
     <Compile Include="Code\Vector4i.cs" />
     <Compile Include="Code\Model.cs" />
     <Compile Include="Code\Program.cs" />

@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Input;
-using Vector3 = OpenTK.Vector3;
 
 namespace DonutGame
 {
@@ -105,6 +102,11 @@ namespace DonutGame
             return new Vector2(v.X, v.Y);
         }
 
+        private static Quaternion ConvertQuaternion(Pure3D.Quaternion v)
+        {
+            return new Quaternion(v.X, v.Y, v.Z, v.W);
+        }
+
         protected static Matrix4 ConvertMatrix(Pure3D.Matrix m)
         {
             return new Matrix4(
@@ -120,6 +122,10 @@ namespace DonutGame
             file.Load("homer_m.p3d");
             PrintHierarchy(file.RootChunk, 0);
 
+            var animFile = new Pure3D.File();
+            animFile.Load("homer_a.p3d");
+            PrintHierarchy(animFile.RootChunk.GetChildren<Pure3D.Chunks.Animation>().FirstOrDefault(), 0);
+
             var model = new Model();
 
             var rootChunk = file.RootChunk;
@@ -131,13 +137,37 @@ namespace DonutGame
             {
                 var jointChunk = jointChunks[i];
                 var boneMatrix = ConvertMatrix(jointChunk.RestPose);
-                Console.WriteLine($"{i} {jointChunk.Name}");
+                Console.WriteLine($"{i} {jointChunk.Name}, parent {jointChunk.SkeletonParent}");
 
                 model.Bones.Add(new Bone
                 {
+                    Name = jointChunk.Name,
                     Transform = boneMatrix,
+                    Pose = Matrix4.Identity,
                     Parent = (int)jointChunk.SkeletonParent,
                 });
+            }
+
+            for (var index = 0; index < model.Bones.Count; ++index)
+            {
+                var bone = model.Bones[index];
+                var boneParent = bone.Parent;
+                bone.Transform *= model.Bones[boneParent].Transform;
+                model.Bones[index] = bone;
+            }
+
+            foreach (var bone in model.Bones)
+            {
+                var boneParent = model.Bones[bone.Parent];
+                var a = bone.Transform.ExtractTranslation() + Vector3.UnitX * 2;
+                var b = boneParent.Transform.ExtractTranslation() + Vector3.UnitX * 2;
+
+                var vertexOffset = (uint)model.Vertices.Count;
+                model.Vertices.Add(new Vertex(a));
+                model.Vertices.Add(new Vertex(b));
+                model.Indices.Add(vertexOffset);
+                model.Indices.Add(vertexOffset + 1);
+                model.Indices.Add(vertexOffset);
             }
 
             foreach (var meshChunk in meshChunks)
@@ -237,7 +267,144 @@ namespace DonutGame
                 }
             }
 
+            var animChunks = animFile.RootChunk.GetChildren<Pure3D.Chunks.Animation>();
+            foreach (var animChunk in animChunks)
+            {
+                LoadAnimation(model, animChunk);
+            }
+
             return model;
+        }
+
+        private Animation LoadAnimation(Model model, Pure3D.Chunks.Animation animChunk)
+        {
+            if (animChunk == null) return null;
+
+            var anim = new Animation()
+            {
+                Name = animChunk.Name,
+            };
+
+            model.Animations.Add(anim);
+
+            anim.FrameCount = (int)animChunk.NumberOfFrames;
+            anim.Length = anim.FrameCount / animChunk.FrameRate;
+
+            var animGroupListChunk = animChunk.GetChildren<Pure3D.Chunks.AnimationGroupList>().FirstOrDefault();
+            var animGroupChunks = animGroupListChunk.GetChildren<Pure3D.Chunks.AnimationGroup>();
+
+            anim.Tracks.AddRange(model.Bones.Select(x => new Animation.Track { Name = x.Name }));
+
+            for (var trackIndex = 0; trackIndex < anim.Tracks.Count; ++trackIndex)
+            {
+                var animTrack = anim.Tracks[trackIndex];
+                var bone = model.Bones[trackIndex];
+                var animGroupChunk = animGroupChunks.Where(x => x.Name == animTrack.Name).FirstOrDefault();
+
+                var boneTransform = bone.Transform;
+
+                if (bone.Parent > -1)
+                {
+                    boneTransform *= model.Bones[bone.Parent].Transform.Inverted();
+                }
+
+                if (animGroupChunk == null)
+                {
+                    animTrack.PositionKeys.Add(new Animation.VectorKey
+                    {
+                        Value = boneTransform.ExtractTranslation(),
+                        Time = 0.0f,
+                    });
+
+                    animTrack.RotationKeys.Add(new Animation.QuaternionKey
+                    {
+                        Value = boneTransform.ExtractRotation(),
+                        Time = 0.0f,
+                    });
+
+                    animTrack.ScaleKeys.Add(new Animation.VectorKey
+                    {
+                        Value = Vector3.One,
+                        Time = 0.0f,
+                    });
+
+                    continue;
+                }
+
+                var positionChannelChunk = animGroupChunk.GetChildren<Pure3D.Chunks.Vector3Channel>().FirstOrDefault();
+                var position2dChannelChunk = animGroupChunk.GetChildren<Pure3D.Chunks.Vector2Channel>().FirstOrDefault();
+                var rotationChannelChunk = animGroupChunk.GetChildren<Pure3D.Chunks.CompressedQuaternionChannel>().FirstOrDefault();
+
+                if (positionChannelChunk != null)
+                {
+                    for (var valueIndex = 0; valueIndex < positionChannelChunk.Values.Length; ++valueIndex)
+                    {
+                        var value = positionChannelChunk.Values[valueIndex];
+                        var position = ConvertVector(value);
+
+                        animTrack.PositionKeys.Add(new Animation.VectorKey
+                        {
+                            Value = position,
+                            Time = positionChannelChunk.Frames[valueIndex],
+                        });
+                    }
+                }
+                else if (position2dChannelChunk != null)
+                {
+                    var constant = ConvertVector(position2dChannelChunk.Constants);
+
+                    for (var valueIndex = 0; valueIndex < position2dChannelChunk.Values.Length; ++valueIndex)
+                    {
+                        var value = position2dChannelChunk.Values[valueIndex];
+                        var position = (constant + new Vector3(value.X, 0, value.Y));
+
+                        animTrack.PositionKeys.Add(new Animation.VectorKey
+                        {
+                            Value = position,
+                            Time = position2dChannelChunk.Frames[valueIndex],
+                        });
+                    }
+                }
+                else
+                {
+                    animTrack.PositionKeys.Add(new Animation.VectorKey
+                    {
+                        Value = boneTransform.ExtractTranslation(),
+                        Time = 0.0f,
+                    });
+                }
+
+                if (rotationChannelChunk != null)
+                {
+                    for (var valueIndex = 0; valueIndex < rotationChannelChunk.Values.Length; ++valueIndex)
+                    {
+                        var value = rotationChannelChunk.Values[valueIndex];
+                        var rotation = ConvertQuaternion(value);
+
+                        animTrack.RotationKeys.Add(new Animation.QuaternionKey
+                        {
+                            Value = rotation,
+                            Time = rotationChannelChunk.Frames[valueIndex],
+                        });
+                    }
+                }
+                else
+                {
+                    animTrack.RotationKeys.Add(new Animation.QuaternionKey
+                    {
+                        Value = boneTransform.ExtractRotation(),
+                        Time = 0.0f,
+                    });
+                }
+
+                animTrack.ScaleKeys.Add(new Animation.VectorKey
+                {
+                    Value = Vector3.One,
+                    Time = 0.0f,
+                });
+            }
+
+            return anim;
         }
 
         protected override void OnLoad(EventArgs e)
@@ -262,13 +429,14 @@ namespace DonutGame
             TextureBufferObject = GL.GenBuffer();
             Texture = GL.GenTexture();
 
-            var boneMatrices = new Matrix4[100];
+            var boneMatrices = new Matrix4[HomerModel.Bones.Count];
             for (var i = 0; i < boneMatrices.Length; ++i)
             {
-                boneMatrices[i] = Matrix4.Identity;
+                var boneMatrix = HomerModel.Bones[i].Transform;
+                boneMatrices[i] = Matrix4.Identity;// boneMatrix.Inverted() * HomerModel.Bones[i].Pose;
             }
-            boneMatrices[17] = Matrix4.CreateTranslation(Vector3.UnitY * 0.2f);
-            boneMatrices[18] = Matrix4.CreateTranslation(Vector3.UnitY * 0.2f);
+            //boneMatrices[17] = Matrix4.CreateTranslation(Vector3.UnitY * 0.2f);
+            //boneMatrices[18] = Matrix4.CreateTranslation(Vector3.UnitY * 0.2f);
 
             GL.BindBuffer(BufferTarget.TextureBuffer, TextureBufferObject);
             GL.BufferData(BufferTarget.TextureBuffer, boneMatrices.Length * 64, boneMatrices, BufferUsageHint.StaticDraw);
