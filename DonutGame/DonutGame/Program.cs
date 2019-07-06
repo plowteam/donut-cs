@@ -20,7 +20,7 @@ namespace DonutGame
             layout(location = 2) in vec2 texCoord0;
             layout(location = 3) in vec4 color;
             layout(location = 4) in vec4 boneWeights;
-            layout(location = 5) in ivec4 boneIndices;
+            layout(location = 5) in int boneIndex;
 
             layout(location = 20) uniform mat4 projection;
             layout(location = 21) uniform mat4 modelView;
@@ -42,10 +42,7 @@ namespace DonutGame
             {
                 vertexColor = color * tint;
 
-                mat4 boneMatrix = GetMatrix(boneIndices[0]) * boneWeights[0];
-                boneMatrix += GetMatrix(boneIndices[1]) * boneWeights[1];
-                boneMatrix += GetMatrix(boneIndices[2]) * boneWeights[2];
-                boneMatrix += GetMatrix(boneIndices[3]) * boneWeights[3];
+                mat4 boneMatrix = GetMatrix(boneIndex) * boneWeights[0];
 
                 vec4 vertex = boneMatrix * vec4(position.xyz, 1.0);
                 vertex = modelView * vertex;
@@ -68,7 +65,10 @@ namespace DonutGame
         [StructLayout(LayoutKind.Sequential)]
         struct Vector4i
         {
-            public int X, Y, Z, W;
+            public int X;
+            public int Y;
+            public int Z;
+            public int W;
 
             public Vector4i(int x, int y, int z, int w)
             {
@@ -95,9 +95,9 @@ namespace DonutGame
             public Vector2 TexCoord0;
             public Color4 Color;
             public Vector4 BoneWeights;
-            public Vector4i BoneIndices;
+            public int BoneIndex;
 
-            public static readonly int SizeOf = 80;
+            public static readonly int SizeOf = 68;
 
             public Vertex(Vector3 position)
             {
@@ -106,7 +106,7 @@ namespace DonutGame
                 TexCoord0 = Vector2.Zero;
                 Color = Color4.White;
                 BoneWeights = Vector4.Zero;
-                BoneIndices = new Vector4i(0, 0, 0, 0);
+                BoneIndex = 0;
             }
 
             public Vertex(Vector3 position, Color4 color)
@@ -116,7 +116,7 @@ namespace DonutGame
                 TexCoord0 = Vector2.Zero;
                 Color = color;
                 BoneWeights = Vector4.Zero;
-                BoneIndices = new Vector4i(0, 0, 0, 0);
+                BoneIndex = 0;
             }
         }
 
@@ -179,6 +179,14 @@ namespace DonutGame
 
             var rootChunk = file.RootChunk;
             var meshChunks = rootChunk.GetChildren<Pure3D.Chunks.Mesh>();
+            var skeletonChunk = rootChunk.GetChildren<Pure3D.Chunks.Skeleton>()[0];
+            var jointChunks = skeletonChunk.GetChildren<Pure3D.Chunks.SkeletonJoint>();
+
+            for (var i = 0; i < jointChunks.Length; ++i)
+            {
+                var jointChunk = jointChunks[i];
+                Console.WriteLine($"{i} {jointChunk.Name}");
+            }
 
             foreach (var meshChunk in meshChunks)
             {
@@ -210,6 +218,19 @@ namespace DonutGame
                         var normal = ConvertVector(normalChunk.Normals[i]);
                         var uv = new Vector2(uvChunk.UVs[i].X, 1.0f - uvChunk.UVs[i].Y);
 
+                        var bone0 = 0;
+
+                        if (matricesChunk != null && matrixPaletteChunk != null)
+                        {
+                            var matrixIndex = matricesChunk.Matrices[i];
+                            var jointIndex0 = matrixPaletteChunk.Matrices[matrixIndex[0]];
+                            var jointIndex1 = matrixPaletteChunk.Matrices[matrixIndex[1]];
+                            var jointIndex2 = matrixPaletteChunk.Matrices[matrixIndex[2]];
+                            var jointIndex3 = matrixPaletteChunk.Matrices[matrixIndex[3]];
+
+                            bone0 = (int)jointIndex3;
+                        }
+
                         return new Vertex
                         {
                             Position = position,
@@ -217,7 +238,7 @@ namespace DonutGame
                             TexCoord0 = uv,
                             Color = Color4.White,
                             BoneWeights = new Vector4(1, 0, 0, 0),
-                            BoneIndices = new Vector4i(0, 0, 0, 0),
+                            BoneIndex = bone0,
                         };
                     }));
 
@@ -289,11 +310,16 @@ namespace DonutGame
             TextureBufferObject = GL.GenBuffer();
             Texture = GL.GenTexture();
 
-            var boneMatrices = new Matrix4[1];
-            boneMatrices[0] = Matrix4.CreateRotationX(MathHelper.DegreesToRadians(45));
+            var boneMatrices = new Matrix4[100];
+            for (var i = 0; i < boneMatrices.Length; ++i)
+            {
+                boneMatrices[i] = Matrix4.Identity;
+            }
+            boneMatrices[17] = Matrix4.CreateTranslation(Vector3.UnitY * 0.2f);
+            boneMatrices[18] = Matrix4.CreateTranslation(Vector3.UnitY * 0.2f);
 
             GL.BindBuffer(BufferTarget.TextureBuffer, TextureBufferObject);
-            GL.BufferData(BufferTarget.TextureBuffer, 64, boneMatrices, BufferUsageHint.StaticDraw);
+            GL.BufferData(BufferTarget.TextureBuffer, boneMatrices.Length * 64, boneMatrices, BufferUsageHint.StaticDraw);
             GL.BindBuffer(BufferTarget.TextureBuffer, 0);
         
             GL.BindTexture(TextureTarget.TextureBuffer, Texture);
@@ -313,7 +339,7 @@ namespace DonutGame
             GL.VertexAttribPointer(2, 2, VertexAttribPointerType.Float, false, Vertex.SizeOf, 24); // TexCoord0
             GL.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, Vertex.SizeOf, 32); // Color
             GL.VertexAttribPointer(4, 4, VertexAttribPointerType.Float, false, Vertex.SizeOf, 48); // Bone Weights
-            GL.VertexAttribPointer(5, 4, VertexAttribPointerType.Int, false, Vertex.SizeOf, 64); // Bone Indices
+            GL.VertexAttribIPointer(5, 1, VertexAttribIntegerType.Int, Vertex.SizeOf, (IntPtr)64); // Bone Indices
             GL.EnableVertexAttribArray(0);
             GL.EnableVertexAttribArray(1);
             GL.EnableVertexAttribArray(2);
