@@ -1,37 +1,62 @@
 ﻿using OpenTK;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 namespace DonutGame
 {
     class Animation
     {
-        [StructLayout(LayoutKind.Sequential)]
-        public struct VectorKey
+        public class ValueKey<T>
         {
-            public Vector3 Value;
-            public float Time;
+            public float Key;
+            public T Value;
+
+            public ValueKey(float key, T value)
+            {
+                Key = key;
+                Value = value;
+            }
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        public struct QuaternionKey
+        public class VectorKey : ValueKey<Vector3>
         {
-            public Quaternion Value;
-            public float Time;
+            public VectorKey(float key, Vector3 value) : base(key, value)
+            {
+            }
+        }
+
+        public class QuaternionKey : ValueKey<Quaternion>
+        {
+            public QuaternionKey(float key, Quaternion value) : base(key, value)
+            {
+            }
+        }
+
+        public class ValueKeyCurve<T>
+        {
+            private List<ValueKey<T>> KeyValues = new List<ValueKey<T>>();
+
+            public void Add(float key, T value)
+            {
+                KeyValues.Add(new ValueKey<T>(key, value));
+            }
+
+            public T Evalulate(float time)
+            {
+                return KeyValues[0].Value;
+            }
         }
 
         public class Track
         {
             public string Name;
 
-            public List<VectorKey> PositionKeys { get; } = new List<VectorKey>();
-            public List<QuaternionKey> RotationKeys { get; } = new List<QuaternionKey>();
-            public List<VectorKey> ScaleKeys { get; } = new List<VectorKey>();
+            public ValueKeyCurve<Vector3> PositionKeys { get; } = new ValueKeyCurve<Vector3>();
+            public ValueKeyCurve<Quaternion> RotationKeys { get; } = new ValueKeyCurve<Quaternion>();
+            public ValueKeyCurve<Vector3> ScaleKeys { get; } = new ValueKeyCurve<Vector3>();
 
-            public Matrix4 T;
             public Matrix4 Transform()
             {
-                return Matrix4.CreateFromQuaternion(RotationKeys[0].Value) * Matrix4.CreateTranslation(PositionKeys[0].Value);
+                return Matrix4.CreateFromQuaternion(RotationKeys.Evalulate(0)) * Matrix4.CreateTranslation(PositionKeys.Evalulate(0));
             }
         }
 

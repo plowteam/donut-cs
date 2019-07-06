@@ -304,28 +304,13 @@ namespace DonutGame
                 Pure3D.Chunks.AnimationGroup animGroupChunk = animGroupChunks.Where(x => x.Name == animTrack.Name).FirstOrDefault();
 
                 var boneTransform = bone.Transform;
-                animTrack.T = boneTransform;
                 boneTransform *= model.Bones[bone.Parent].Transform.Inverted();
 
                 if (animGroupChunk == null)
                 {
-                    animTrack.PositionKeys.Add(new Animation.VectorKey
-                    {
-                        Value = boneTransform.ExtractTranslation(),
-                        Time = 0.0f,
-                    });
-
-                    animTrack.RotationKeys.Add(new Animation.QuaternionKey
-                    {
-                        Value = boneTransform.ExtractRotation(),
-                        Time = 0.0f,
-                    });
-
-                    animTrack.ScaleKeys.Add(new Animation.VectorKey
-                    {
-                        Value = Vector3.One,
-                        Time = 0.0f,
-                    });
+                    animTrack.PositionKeys.Add(0.0f, boneTransform.ExtractTranslation());
+                    animTrack.RotationKeys.Add(0.0f, boneTransform.ExtractRotation());
+                    animTrack.ScaleKeys.Add(0.0f, Vector3.Zero);
 
                     continue;
                 }
@@ -341,11 +326,7 @@ namespace DonutGame
                         var value = positionChannelChunk.Values[valueIndex];
                         var position = ConvertVector(value);
 
-                        animTrack.PositionKeys.Add(new Animation.VectorKey
-                        {
-                            Value = position,
-                            Time = positionChannelChunk.Frames[valueIndex],
-                        });
+                        animTrack.PositionKeys.Add(positionChannelChunk.Frames[valueIndex], position);
                     }
                 }
                 else if (position2dChannelChunk != null)
@@ -357,20 +338,12 @@ namespace DonutGame
                         var value = position2dChannelChunk.Values[valueIndex];
                         var position = (constant + new Vector3(value.X, 0, value.Y));
 
-                        animTrack.PositionKeys.Add(new Animation.VectorKey
-                        {
-                            Value = position,
-                            Time = position2dChannelChunk.Frames[valueIndex],
-                        });
+                        animTrack.PositionKeys.Add(position2dChannelChunk.Frames[valueIndex], position);
                     }
                 }
                 else
                 {
-                    animTrack.PositionKeys.Add(new Animation.VectorKey
-                    {
-                        Value = boneTransform.ExtractTranslation(),
-                        Time = 0.0f,
-                    });
+                    animTrack.PositionKeys.Add(0.0f, boneTransform.ExtractTranslation());
                 }
 
                 if (rotationChannelChunk != null)
@@ -380,27 +353,15 @@ namespace DonutGame
                         var value = rotationChannelChunk.Values[valueIndex];
                         var rotation = ConvertQuaternion(value);
 
-                        animTrack.RotationKeys.Add(new Animation.QuaternionKey
-                        {
-                            Value = rotation,
-                            Time = rotationChannelChunk.Frames[valueIndex],
-                        });
+                        animTrack.RotationKeys.Add(rotationChannelChunk.Frames[valueIndex], rotation);
                     }
                 }
                 else
                 {
-                    animTrack.RotationKeys.Add(new Animation.QuaternionKey
-                    {
-                        Value = boneTransform.ExtractRotation(),
-                        Time = 0.0f,
-                    });
+                    animTrack.RotationKeys.Add(0.0f, boneTransform.ExtractRotation());
                 }
 
-                animTrack.ScaleKeys.Add(new Animation.VectorKey
-                {
-                    Value = Vector3.One,
-                    Time = 0.0f,
-                });
+                animTrack.ScaleKeys.Add(0.0f, Vector3.One);
             }
 
             return anim;
