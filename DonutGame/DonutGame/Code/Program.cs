@@ -82,7 +82,7 @@ namespace DonutGame
 
             MainCamera.Position = Vector3.UnitY * -10;
 
-            HomerModel = LoadModel("homer_m.p3d");
+            HomerModel = LoadModel("homer");
         }
 
         static void PrintHierarchy(Pure3D.Chunk chunk, int indent)
@@ -116,14 +116,14 @@ namespace DonutGame
                 m.M41, m.M42, m.M43, m.M44);
         }
 
-        private Model LoadModel(string path)
+        private Model LoadModel(string name)
         {
             var file = new Pure3D.File();
-            file.Load("homer_m.p3d");
+            file.Load($"{name}_m.p3d");
             PrintHierarchy(file.RootChunk, 0);
 
             var animFile = new Pure3D.File();
-            animFile.Load("homer_a.p3d");
+            animFile.Load($"{name}_a.p3d");
             PrintHierarchy(animFile.RootChunk.GetChildren<Pure3D.Chunks.Animation>().FirstOrDefault(), 0);
 
             var model = new Model();
@@ -143,7 +143,6 @@ namespace DonutGame
                 {
                     Name = jointChunk.Name,
                     Transform = boneMatrix,
-                    Pose = Matrix4.Identity,
                     Parent = (int)jointChunk.SkeletonParent,
                 });
             }
@@ -155,20 +154,6 @@ namespace DonutGame
                 bone.Transform *= model.Bones[boneParent].Transform;
                 model.Bones[index] = bone;
             }
-
-            //foreach (var bone in model.Bones)
-            //{
-            //    var boneParent = model.Bones[bone.Parent];
-            //    var a = bone.Transform.ExtractTranslation() + Vector3.UnitX * 2;
-            //    var b = boneParent.Transform.ExtractTranslation() + Vector3.UnitX * 2;
-
-            //    var vertexOffset = (uint)model.Vertices.Count;
-            //    model.Vertices.Add(new Vertex(a));
-            //    model.Vertices.Add(new Vertex(b));
-            //    model.Indices.Add(vertexOffset);
-            //    model.Indices.Add(vertexOffset + 1);
-            //    model.Indices.Add(vertexOffset);
-            //}
 
             foreach (var meshChunk in meshChunks)
             {
@@ -290,6 +275,7 @@ namespace DonutGame
             model.Animations.Add(anim);
 
             anim.FrameCount = (int)animChunk.NumberOfFrames;
+            anim.FrameRate = animChunk.FrameRate;
             anim.Length = anim.FrameCount / animChunk.FrameRate;
 
             var animGroupListChunk = animChunk.GetChildren<Pure3D.Chunks.AnimationGroupList>().FirstOrDefault();
@@ -392,9 +378,6 @@ namespace DonutGame
             GL.BufferData(BufferTarget.TextureBuffer, boneMatrices.Length * 64, boneMatrices, BufferUsageHint.StaticDraw);
             GL.BindBuffer(BufferTarget.TextureBuffer, 0);
 
-            GL.BindTexture(TextureTarget.TextureBuffer, Texture);
-            GL.TexBuffer(TextureBufferTarget.TextureBuffer, SizedInternalFormat.Rgba32f, TextureBufferObject);
-            GL.BindTexture(TextureTarget.TextureBuffer, 0);
         }
 
         protected override void OnLoad(EventArgs e)
@@ -420,6 +403,10 @@ namespace DonutGame
             Texture = GL.GenTexture();
 
             UpdateAnimation(AnimIndex, 0.0f);
+
+            GL.BindTexture(TextureTarget.TextureBuffer, Texture);
+            GL.TexBuffer(TextureBufferTarget.TextureBuffer, SizedInternalFormat.Rgba32f, TextureBufferObject);
+            GL.BindTexture(TextureTarget.TextureBuffer, 0);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             GL.BufferData(BufferTarget.ArrayBuffer, HomerModel.Vertices.Count * Vertex.SizeOf, HomerModel.Vertices.ToArray(), BufferUsageHint.StaticDraw);
@@ -499,7 +486,7 @@ namespace DonutGame
             MainCamera.UpdateViewMatrix();
 
             var anim = HomerModel.Animations[AnimIndex % HomerModel.Animations.Count];
-            AnimTime += dt * (anim.FrameCount / anim.Length);
+            AnimTime += dt * anim.FrameRate;
             UpdateAnimation(AnimIndex, AnimTime);
         }
 
@@ -577,6 +564,21 @@ namespace DonutGame
             using (var game = new Game())
             {
                 game.Run();
+            }
+        }
+
+        private static void NativeChunkGen()
+        {
+            foreach (var type in typeof(Pure3D.Chunk)
+                .Assembly
+                .GetTypes()
+                .Where(x => x.IsSubclassOf(typeof(Pure3D.Chunk))))
+            {
+                var attribute = (Pure3D.ChunkType)Attribute.GetCustomAttribute(type, typeof(Pure3D.ChunkType));
+                if (attribute == null) continue;
+
+                Console.WriteLine($"{type.Name} = {attribute.TypeID},"); // For enum gen
+                Console.WriteLine($"{{{attribute.TypeID}, \"{type.Name}\"}},"); // For named enum gen
             }
         }
     }

@@ -42,7 +42,6 @@ namespace DonutGame
     {
         public string Name;
         public Matrix4 Transform;
-        public Matrix4 Pose;
         public int Parent;
     }
 

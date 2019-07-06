@@ -150,6 +150,7 @@ namespace DonutGame
         public string Name { get; set; }
         public float Length { get; set; }
         public int FrameCount { get; set; }
+        public float FrameRate { get; set; }
         public List<Track> Tracks { get; } = new List<Track>();
     }
 }
