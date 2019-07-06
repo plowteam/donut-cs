@@ -22,15 +22,28 @@ namespace DonutGame
             layout(location = 21) uniform mat4 modelView;
             layout(location = 22) uniform vec4 tint;
             layout(location = 23) uniform float zOffset;
+            layout(location = 24) uniform samplerBuffer boneBuffer;
+
+            mat4 GetMatrix(int index)
+            {
+	            return mat4(texelFetch(boneBuffer, (index * 4) + 0),
+				            texelFetch(boneBuffer, (index * 4) + 1),
+				            texelFetch(boneBuffer, (index * 4) + 2),
+				            texelFetch(boneBuffer, (index * 4) + 3));
+            }
 
             out vec4 vertexColor;
 
             void main(void)
             {
                 vertexColor = color * tint;
-                vec4 v = modelView * vec4(position.xyz, 1.0);
-                v.w -= zOffset;
-                gl_Position = projection * v;
+
+                mat4 boneMatrix = GetMatrix(0);
+                vec4 vertex = boneMatrix * vec4(position.xyz, 1.0);
+                vertex = modelView * vertex;
+                vertex.w -= zOffset;
+
+                gl_Position = projection * vertex;
             }
         ";
 
@@ -43,19 +56,6 @@ namespace DonutGame
                 outputColor = vertexColor;
             }
         ";
-
-        //readonly Vertex[] Vertices = new Vertex[]
-        //{
-        //    new Vertex(new Vector3(-0.5f, 0.0f, -0.5f), Color4.Red),
-        //    new Vertex(new Vector3(0.5f, 0.0f, -0.5f), Color4.Green),
-        //    new Vertex(new Vector3(0.5f, 0.0f, 0.5f), Color4.Blue),
-        //    new Vertex(new Vector3(-0.5f, 0.0f, 0.5f), Color4.Yellow),
-        //};
-
-        //readonly uint[] Indices = new uint[]
-        //{
-        //    0, 1, 2, 2, 3, 0
-        //};
 
         struct Vertex
         {
@@ -94,6 +94,8 @@ namespace DonutGame
         int ShaderProgram;
         int VertexBufferObject;
         int IndexBufferObject;
+        int TextureBufferObject;
+        int Texture;
         int VertexArrayObject;
 
         Matrix4 ProjectionMatrix;
@@ -196,7 +198,6 @@ namespace DonutGame
 
                                 if (a == b || b == c || c == a)
                                 {
-                                    Console.WriteLine("DEGENERATE TRIANGLE!");
                                     continue;
                                 }
 
@@ -212,7 +213,6 @@ namespace DonutGame
 
                                 if (a == b || b == c || c == a)
                                 {
-                                    Console.WriteLine("DEGENERATE TRIANGLE!");
                                     continue;
                                 }
 
@@ -247,6 +247,22 @@ namespace DonutGame
 
             VertexBufferObject = GL.GenBuffer();
             IndexBufferObject = GL.GenBuffer();
+            TextureBufferObject = GL.GenBuffer();
+            Texture = GL.GenTexture();
+
+            var boneMatrices = new Matrix4[1];
+            boneMatrices[0] = Matrix4.CreateRotationX(MathHelper.DegreesToRadians(45));
+
+            GL.BindBuffer(BufferTarget.TextureBuffer, TextureBufferObject);
+            GL.BufferData(BufferTarget.TextureBuffer, 64, boneMatrices, BufferUsageHint.StaticDraw);
+            GL.BindBuffer(BufferTarget.TextureBuffer, 0);
+        
+            GL.BindTexture(TextureTarget.TextureBuffer, Texture);
+            GL.TexBuffer(TextureBufferTarget.TextureBuffer, SizedInternalFormat.Rgba32f, TextureBufferObject);
+            GL.BindTexture(TextureTarget.TextureBuffer, 0);
+
+
+
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             GL.BufferData(BufferTarget.ArrayBuffer, HomerModel.Vertices.Count * Vertex.SizeOf, HomerModel.Vertices.ToArray(), BufferUsageHint.StaticDraw);
@@ -274,11 +290,15 @@ namespace DonutGame
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+            GL.BindBuffer(BufferTarget.TextureBuffer, 0);
+            GL.BindTexture(TextureTarget.TextureBuffer, 0);
             GL.BindVertexArray(0);
             GL.UseProgram(0);
 
             GL.DeleteBuffer(VertexBufferObject);
             GL.DeleteBuffer(IndexBufferObject);
+            GL.DeleteBuffer(TextureBufferObject);
+            GL.DeleteTexture(Texture);
             GL.DeleteVertexArray(VertexArrayObject);
             GL.DeleteProgram(ShaderProgram);
             GL.DeleteShader(FragmentShader);
@@ -327,6 +347,9 @@ namespace DonutGame
             GL.DepthMask(true);
             GL.DepthFunc(DepthFunction.Lequal);
 
+            GL.Enable(EnableCap.Texture1D);
+            GL.Enable(EnableCap.Texture2D);
+
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
@@ -342,15 +365,21 @@ namespace DonutGame
             GL.UniformMatrix4(20, false, ref ProjectionMatrix);
             GL.UniformMatrix4(21, false, ref ModelViewMatrix);
 
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.TextureBuffer, Texture);
+            GL.Uniform1(24, 0);
+
             GL.Uniform4(22, 0.25f, 0.25f, 0.25f, 1.0f);
             GL.Uniform1(23, 0.001f);
             GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);
-
+          
             GL.Uniform4(22, 0.0f, 1.0f, 1.0f, 1.0f);
             GL.Uniform1(23, 0.0f);
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
             GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
+
+            GL.BindTexture(TextureTarget.TextureBuffer, 0);
 
             SwapBuffers();
         }
