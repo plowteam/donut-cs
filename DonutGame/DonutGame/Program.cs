@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
@@ -18,6 +19,9 @@ namespace DonutGame
             layout(location = 1) in vec3 normal;
             layout(location = 2) in vec2 texCoord0;
             layout(location = 3) in vec4 color;
+            layout(location = 4) in vec4 boneWeights;
+            layout(location = 5) in ivec4 boneIndices;
+
             layout(location = 20) uniform mat4 projection;
             layout(location = 21) uniform mat4 modelView;
             layout(location = 22) uniform vec4 tint;
@@ -38,7 +42,11 @@ namespace DonutGame
             {
                 vertexColor = color * tint;
 
-                mat4 boneMatrix = GetMatrix(0);
+                mat4 boneMatrix = GetMatrix(boneIndices[0]) * boneWeights[0];
+                boneMatrix += GetMatrix(boneIndices[1]) * boneWeights[1];
+                boneMatrix += GetMatrix(boneIndices[2]) * boneWeights[2];
+                boneMatrix += GetMatrix(boneIndices[3]) * boneWeights[3];
+
                 vec4 vertex = boneMatrix * vec4(position.xyz, 1.0);
                 vertex = modelView * vertex;
                 vertex.w -= zOffset;
@@ -57,14 +65,39 @@ namespace DonutGame
             }
         ";
 
+        [StructLayout(LayoutKind.Sequential)]
+        struct Vector4i
+        {
+            public int X, Y, Z, W;
+
+            public Vector4i(int x, int y, int z, int w)
+            {
+                X = x;
+                Y = y;
+                Z = z;
+                W = w;
+            }
+
+            public Vector4i(int v)
+            {
+                X = v;
+                Y = v;
+                Z = v;
+                W = v;
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
         struct Vertex
         {
             public Vector3 Position;
             public Vector3 Normal;
             public Vector2 TexCoord0;
             public Color4 Color;
+            public Vector4 BoneWeights;
+            public Vector4i BoneIndices;
 
-            public static readonly int SizeOf = 48;
+            public static readonly int SizeOf = 80;
 
             public Vertex(Vector3 position)
             {
@@ -72,6 +105,8 @@ namespace DonutGame
                 Normal = Vector3.Zero;
                 TexCoord0 = Vector2.Zero;
                 Color = Color4.White;
+                BoneWeights = Vector4.Zero;
+                BoneIndices = new Vector4i(0, 0, 0, 0);
             }
 
             public Vertex(Vector3 position, Color4 color)
@@ -80,6 +115,8 @@ namespace DonutGame
                 Normal = Vector3.Zero;
                 TexCoord0 = Vector2.Zero;
                 Color = color;
+                BoneWeights = Vector4.Zero;
+                BoneIndices = new Vector4i(0, 0, 0, 0);
             }
         }
 
@@ -178,7 +215,9 @@ namespace DonutGame
                             Position = position,
                             Normal = normal,
                             TexCoord0 = uv,
-                            Color = Color4.White
+                            Color = Color4.White,
+                            BoneWeights = new Vector4(1, 0, 0, 0),
+                            BoneIndices = new Vector4i(0, 0, 0, 0),
                         };
                     }));
 
@@ -261,9 +300,6 @@ namespace DonutGame
             GL.TexBuffer(TextureBufferTarget.TextureBuffer, SizedInternalFormat.Rgba32f, TextureBufferObject);
             GL.BindTexture(TextureTarget.TextureBuffer, 0);
 
-
-
-
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             GL.BufferData(BufferTarget.ArrayBuffer, HomerModel.Vertices.Count * Vertex.SizeOf, HomerModel.Vertices.ToArray(), BufferUsageHint.StaticDraw);
 
@@ -276,10 +312,14 @@ namespace DonutGame
             GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, Vertex.SizeOf, 12); // Normal
             GL.VertexAttribPointer(2, 2, VertexAttribPointerType.Float, false, Vertex.SizeOf, 24); // TexCoord0
             GL.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, Vertex.SizeOf, 32); // Color
+            GL.VertexAttribPointer(4, 4, VertexAttribPointerType.Float, false, Vertex.SizeOf, 48); // Bone Weights
+            GL.VertexAttribPointer(5, 4, VertexAttribPointerType.Int, false, Vertex.SizeOf, 64); // Bone Indices
             GL.EnableVertexAttribArray(0);
             GL.EnableVertexAttribArray(1);
             GL.EnableVertexAttribArray(2);
             GL.EnableVertexAttribArray(3);
+            GL.EnableVertexAttribArray(4);
+            GL.EnableVertexAttribArray(5);
 
             GL.ClearColor(Color4.Black);
         }
