@@ -367,6 +367,36 @@ namespace DonutGame
             return anim;
         }
 
+        private void UpdateAnimation(float time)
+        {
+            var animation = HomerModel.Animations[0];
+            var poseMatrices = new Matrix4[HomerModel.Bones.Count];
+            poseMatrices[0] = animation.Tracks[0].Evalulate(time);
+
+            for (var index = 0; index < poseMatrices.Length; ++index)
+            {
+                var bone = HomerModel.Bones[index];
+                var boneParent = bone.Parent;
+
+                poseMatrices[index] = animation.Tracks[index].Evalulate(time) * poseMatrices[boneParent];
+            }
+
+            var boneMatrices = new Matrix4[HomerModel.Bones.Count];
+            for (var i = 0; i < boneMatrices.Length; ++i)
+            {
+                var boneMatrix = HomerModel.Bones[i].Transform;
+                boneMatrices[i] = (boneMatrix.Inverted() * poseMatrices[i]);
+            }
+
+            GL.BindBuffer(BufferTarget.TextureBuffer, TextureBufferObject);
+            GL.BufferData(BufferTarget.TextureBuffer, boneMatrices.Length * 64, boneMatrices, BufferUsageHint.StaticDraw);
+            GL.BindBuffer(BufferTarget.TextureBuffer, 0);
+
+            GL.BindTexture(TextureTarget.TextureBuffer, Texture);
+            GL.TexBuffer(TextureBufferTarget.TextureBuffer, SizedInternalFormat.Rgba32f, TextureBufferObject);
+            GL.BindTexture(TextureTarget.TextureBuffer, 0);
+        }
+
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
@@ -389,32 +419,7 @@ namespace DonutGame
             TextureBufferObject = GL.GenBuffer();
             Texture = GL.GenTexture();
 
-            var animation = HomerModel.Animations[0];
-            var poseMatrices = new Matrix4[HomerModel.Bones.Count];
-            poseMatrices[0] = animation.Tracks[0].Transform();
-
-            for (var index = 0; index < poseMatrices.Length; ++index)
-            {
-                var bone = HomerModel.Bones[index];
-                var boneParent = bone.Parent;
-
-                poseMatrices[index] = animation.Tracks[index].Transform() * poseMatrices[boneParent];
-            }
-
-            var boneMatrices = new Matrix4[HomerModel.Bones.Count];
-            for (var i = 0; i < boneMatrices.Length; ++i)
-            {
-                var boneMatrix = HomerModel.Bones[i].Transform;
-                boneMatrices[i] = (boneMatrix.Inverted() * poseMatrices[i]);
-            }
-
-            GL.BindBuffer(BufferTarget.TextureBuffer, TextureBufferObject);
-            GL.BufferData(BufferTarget.TextureBuffer, boneMatrices.Length * 64, boneMatrices, BufferUsageHint.StaticDraw);
-            GL.BindBuffer(BufferTarget.TextureBuffer, 0);
-        
-            GL.BindTexture(TextureTarget.TextureBuffer, Texture);
-            GL.TexBuffer(TextureBufferTarget.TextureBuffer, SizedInternalFormat.Rgba32f, TextureBufferObject);
-            GL.BindTexture(TextureTarget.TextureBuffer, 0);
+            UpdateAnimation(0.0f);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             GL.BufferData(BufferTarget.ArrayBuffer, HomerModel.Vertices.Count * Vertex.SizeOf, HomerModel.Vertices.ToArray(), BufferUsageHint.StaticDraw);
@@ -471,6 +476,8 @@ namespace DonutGame
             ProjectionMatrix = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(40), aspectRatio, 0.1f, 4000f);
         }
 
+        float AnimTime = 0;
+
         protected override void OnUpdateFrame(FrameEventArgs e)
         {
             var dt = (float)e.Time;
@@ -489,6 +496,9 @@ namespace DonutGame
             MainCamera.UpdateRotationQuat();
             MainCamera.Move(inputForce, dt);
             MainCamera.UpdateViewMatrix();
+
+            AnimTime += dt * 1.0f;
+            UpdateAnimation(AnimTime);
         }
 
         protected override void OnRenderFrame(FrameEventArgs e)
