@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Drawing;
 using System.Linq;
+using System.Runtime.InteropServices;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
@@ -23,7 +25,7 @@ namespace DonutGame
             layout(location = 21) uniform mat4 modelView;
             layout(location = 22) uniform vec4 tint;
             layout(location = 23) uniform float zOffset;
-            layout(location = 24) uniform samplerBuffer boneBuffer;
+            layout(location = 24) uniform samplerBuffer boneBuffer;            
 
             mat4 GetMatrix(int index)
             {
@@ -33,10 +35,13 @@ namespace DonutGame
 				            texelFetch(boneBuffer, (index * 4) + 3));
             }
 
+            out vec2 texCoord;
             out vec4 vertexColor;
+            out vec3 fragNormal;
 
             void main(void)
             {
+                texCoord = texCoord0;
                 vertexColor = color * tint;
 
                 mat4 boneMatrix = GetMatrix(boneIndex) * boneWeights[0];
@@ -45,17 +50,33 @@ namespace DonutGame
                 vertex = modelView * vertex;
                 vertex.w -= zOffset;
 
+                fragNormal = (boneMatrix * vec4(normal, 0)).xyz;
+
                 gl_Position = projection * vertex;
             }
         ";
 
         const string FragmentShaderSource = @"
             #version 450 core
+
+            layout(location = 25) uniform sampler2D diffuseTex;
+
+            in vec2 texCoord;
             in vec4 vertexColor;
+            in vec3 fragNormal;
             out vec4 outputColor;
+
             void main(void)
             {
-                outputColor = vertexColor;
+	            vec3 n = normalize(fragNormal);
+	            vec3 light0Position = normalize(vec3(-0.4, 0.5, -0.6));
+	            float NdotL0 = clamp(dot(n, light0Position), 0.0, 1.0);
+	            vec3 diffuse = vec3(NdotL0 + 0.25);
+	            diffuse.rgb = clamp(diffuse.rgb, 0.0, 1.0);
+
+                vec3 diffuseColor = texture2D(diffuseTex, texCoord).rgb;
+
+                outputColor = vec4(diffuseColor * diffuse, 1.0);
             }
         ";
 
@@ -65,7 +86,8 @@ namespace DonutGame
         int VertexBufferObject;
         int IndexBufferObject;
         int TextureBufferObject;
-        int Texture;
+        int MatrixBufferTexture;
+        int DiffuseTexture;
         int VertexArrayObject;
 
         Matrix4 ProjectionMatrix;
@@ -124,7 +146,7 @@ namespace DonutGame
 
             var animFile = new Pure3D.File();
             animFile.Load($"{name}_a.p3d");
-            PrintHierarchy(animFile.RootChunk.GetChildren<Pure3D.Chunks.Animation>().FirstOrDefault(), 0);
+            //PrintHierarchy(animFile.RootChunk.GetChildren<Pure3D.Chunks.Animation>().FirstOrDefault(), 0);
 
             var model = new Model();
 
@@ -137,7 +159,7 @@ namespace DonutGame
             {
                 var jointChunk = jointChunks[i];
                 var boneMatrix = ConvertMatrix(jointChunk.RestPose);
-                Console.WriteLine($"{i} {jointChunk.Name}, parent {jointChunk.SkeletonParent}");
+                //Console.WriteLine($"{i} {jointChunk.Name}, parent {jointChunk.SkeletonParent}");
 
                 model.Bones.Add(new Bone
                 {
@@ -172,10 +194,13 @@ namespace DonutGame
                     var normalChunk = primChunk.GetChildren<Pure3D.Chunks.NormalList>().FirstOrDefault();
                     var uvChunk = primChunk.GetChildren<Pure3D.Chunks.UVList>().FirstOrDefault();
                     var indicesChunk = primChunk.GetChildren<Pure3D.Chunks.IndexList>().FirstOrDefault();
-                    var matricesChunk = primChunk.GetChildren<Pure3D.Chunks.MatrixList>().FirstOrDefault();
+                    var matrixListChunk = primChunk.GetChildren<Pure3D.Chunks.MatrixList>().FirstOrDefault();
                     var matrixPaletteChunk = primChunk.GetChildren<Pure3D.Chunks.MatrixPalette>().FirstOrDefault();
+                    var weightListChunk = primChunk.GetChildren<Pure3D.Chunks.WeightList>().FirstOrDefault();
                     var shaderChunk = rootChunk.GetChildrenByName<Pure3D.Chunks.Shader>(primChunk.ShaderName).FirstOrDefault();
                     var textureParameterChunk = shaderChunk.GetChildren<Pure3D.Chunks.ShaderTextureParam>().FirstOrDefault();
+
+                    Console.WriteLine(textureParameterChunk.Value);
 
                     var vertexOffset = (uint)model.Vertices.Count;
 
@@ -187,9 +212,9 @@ namespace DonutGame
 
                         var bone0 = 0;
 
-                        if (matricesChunk != null && matrixPaletteChunk != null)
+                        if (matrixListChunk != null && matrixPaletteChunk != null)
                         {
-                            var matrixIndex = matricesChunk.Matrices[i];
+                            var matrixIndex = matrixListChunk.Matrices[i];
                             var jointIndex0 = matrixPaletteChunk.Matrices[matrixIndex[0]];
                             var jointIndex1 = matrixPaletteChunk.Matrices[matrixIndex[1]];
                             var jointIndex2 = matrixPaletteChunk.Matrices[matrixIndex[2]];
@@ -357,7 +382,7 @@ namespace DonutGame
         {
             var animation = HomerModel.Animations[animIndex % HomerModel.Animations.Count];
             var poseMatrices = new Matrix4[HomerModel.Bones.Count];
-            poseMatrices[0] = animation.Tracks[0].Evalulate(time);
+            poseMatrices[0] = Matrix4.Identity;
 
             for (var index = 0; index < poseMatrices.Length; ++index)
             {
@@ -371,13 +396,12 @@ namespace DonutGame
             for (var i = 0; i < boneMatrices.Length; ++i)
             {
                 var boneMatrix = HomerModel.Bones[i].Transform;
-                boneMatrices[i] = (boneMatrix.Inverted() * poseMatrices[i]);
+                boneMatrices[i] = boneMatrix.Inverted() * poseMatrices[i];
             }
 
             GL.BindBuffer(BufferTarget.TextureBuffer, TextureBufferObject);
             GL.BufferData(BufferTarget.TextureBuffer, boneMatrices.Length * 64, boneMatrices, BufferUsageHint.StaticDraw);
             GL.BindBuffer(BufferTarget.TextureBuffer, 0);
-
         }
 
         protected override void OnLoad(EventArgs e)
@@ -400,11 +424,28 @@ namespace DonutGame
             VertexBufferObject = GL.GenBuffer();
             IndexBufferObject = GL.GenBuffer();
             TextureBufferObject = GL.GenBuffer();
-            Texture = GL.GenTexture();
+            MatrixBufferTexture = GL.GenTexture();
+            DiffuseTexture = GL.GenTexture();
+
+            GL.BindTexture(TextureTarget.Texture2D, DiffuseTexture);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+
+            var textureSource = new Bitmap("char_swatches_lit.bmp");
+            Console.WriteLine($"{textureSource.Width}, {textureSource.Height}");
+
+            var bitmapData = textureSource.LockBits(new Rectangle(0, 0, textureSource.Width, textureSource.Height),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, textureSource.Width, textureSource.Height, 0, PixelFormat.Bgra, PixelType.UnsignedByte, bitmapData.Scan0);
+            textureSource.UnlockBits(bitmapData);
+
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+
 
             UpdateAnimation(AnimIndex, 0.0f);
 
-            GL.BindTexture(TextureTarget.TextureBuffer, Texture);
+            GL.BindTexture(TextureTarget.TextureBuffer, MatrixBufferTexture);
             GL.TexBuffer(TextureBufferTarget.TextureBuffer, SizedInternalFormat.Rgba32f, TextureBufferObject);
             GL.BindTexture(TextureTarget.TextureBuffer, 0);
 
@@ -439,6 +480,7 @@ namespace DonutGame
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
             GL.BindBuffer(BufferTarget.TextureBuffer, 0);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
             GL.BindTexture(TextureTarget.TextureBuffer, 0);
             GL.BindVertexArray(0);
             GL.UseProgram(0);
@@ -446,7 +488,8 @@ namespace DonutGame
             GL.DeleteBuffer(VertexBufferObject);
             GL.DeleteBuffer(IndexBufferObject);
             GL.DeleteBuffer(TextureBufferObject);
-            GL.DeleteTexture(Texture);
+            GL.DeleteTexture(MatrixBufferTexture);
+            GL.DeleteTexture(DiffuseTexture);
             GL.DeleteVertexArray(VertexArrayObject);
             GL.DeleteProgram(ShaderProgram);
             GL.DeleteShader(FragmentShader);
@@ -517,19 +560,17 @@ namespace DonutGame
             GL.UniformMatrix4(21, false, ref ModelViewMatrix);
 
             GL.ActiveTexture(TextureUnit.Texture0);
-            GL.BindTexture(TextureTarget.TextureBuffer, Texture);
+            GL.BindTexture(TextureTarget.TextureBuffer, MatrixBufferTexture);
             GL.Uniform1(24, 0);
 
-            GL.Uniform4(22, 0.25f, 0.25f, 0.25f, 1.0f);
-            GL.Uniform1(23, 0.001f);
-            GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);
-          
-            GL.Uniform4(22, 0.0f, 1.0f, 1.0f, 1.0f);
-            GL.Uniform1(23, 0.0f);
-            GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
-            GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);
-            GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
+            GL.ActiveTexture(TextureUnit.Texture1);
+            GL.BindTexture(TextureTarget.Texture2D, DiffuseTexture);
+            GL.Uniform1(25, 1);
 
+            GL.Uniform4(22, 0.25f, 0.25f, 0.25f, 1.0f);
+            GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);       
+
+            GL.BindTexture(TextureTarget.Texture2D, 0);
             GL.BindTexture(TextureTarget.TextureBuffer, 0);
 
             SwapBuffers();
