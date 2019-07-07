@@ -42,7 +42,7 @@ namespace DonutGame
             void main(void)
             {
                 texCoord = texCoord0;
-                vertexColor = color * tint;
+                vertexColor = color;
 
                 mat4 boneMatrix = GetMatrix(boneIndex) * boneWeights[0];
 
@@ -71,7 +71,7 @@ namespace DonutGame
 	            vec3 n = normalize(fragNormal);
 	            vec3 light0Position = normalize(vec3(-0.4, 0.5, -0.6));
 	            float NdotL0 = clamp(dot(n, light0Position), 0.0, 1.0);
-	            vec3 diffuse = vec3(NdotL0 + 0.25);
+	            vec3 diffuse = vec3(NdotL0 + 0.5);
 	            diffuse.rgb = clamp(diffuse.rgb, 0.0, 1.0);
 
                 vec3 diffuseColor = texture2D(diffuseTex, texCoord).rgb;
@@ -94,7 +94,7 @@ namespace DonutGame
         Matrix4 ModelViewMatrix;
 
         Camera MainCamera = new Camera();
-        readonly Model HomerModel = null;
+        readonly Model TestModel = null;
 
         public Game() :
             base(1280, 720, new GraphicsMode(32, 24, 0, 8), "Plow Team", GameWindowFlags.Default)
@@ -104,7 +104,25 @@ namespace DonutGame
 
             MainCamera.Position = Vector3.UnitY * -10;
 
-            HomerModel = LoadModel("homer");
+            if (true)
+            {
+                var modelFile = new Pure3D.File();
+                modelFile.Load("homer_m.p3d");
+                var animFile = new Pure3D.File();
+                animFile.Load("homer_a.p3d");
+
+                TestModel = LoadModel(modelFile, animFile);
+            }
+            else
+            {
+                var modelFile = new Pure3D.File();
+                modelFile.Load("l1z1.p3d");
+                TestModel = LoadModel(modelFile, null);
+
+                PrintHierarchy(modelFile.RootChunk, 0);
+
+                Console.WriteLine($"{TestModel.Vertices.Count} vertices");
+            }
         }
 
         static void PrintHierarchy(Pure3D.Chunk chunk, int indent)
@@ -138,34 +156,47 @@ namespace DonutGame
                 m.M41, m.M42, m.M43, m.M44);
         }
 
-        private Model LoadModel(string name)
+        private static Color4 ConvertColor(uint v)
         {
-            var file = new Pure3D.File();
-            file.Load($"{name}_m.p3d");
-            PrintHierarchy(file.RootChunk, 0);
+            return new Color4((v & 255) / 255.0f,
+                             ((v >> 8) & 255) / 255.0f,
+                             ((v >> 16) & 255) / 255.0f,
+                             ((v >> 24) & 255) / 255.0f);
+        }
 
-            var animFile = new Pure3D.File();
-            animFile.Load($"{name}_a.p3d");
-            //PrintHierarchy(animFile.RootChunk.GetChildren<Pure3D.Chunks.Animation>().FirstOrDefault(), 0);
-
+        private Model LoadModel(Pure3D.File modelFile, Pure3D.File animFile)
+        {
             var model = new Model();
 
-            var rootChunk = file.RootChunk;
+            var rootChunk = modelFile.RootChunk;
             var meshChunks = rootChunk.GetChildren<Pure3D.Chunks.Mesh>();
-            var skeletonChunk = rootChunk.GetChildren<Pure3D.Chunks.Skeleton>()[0];
-            var jointChunks = skeletonChunk.GetChildren<Pure3D.Chunks.SkeletonJoint>();
+            var skeletonChunk = rootChunk.GetChildren<Pure3D.Chunks.Skeleton>().FirstOrDefault();
 
-            for (var i = 0; i < jointChunks.Length; ++i)
+            if (skeletonChunk != null)
             {
-                var jointChunk = jointChunks[i];
-                var boneMatrix = ConvertMatrix(jointChunk.RestPose);
-                //Console.WriteLine($"{i} {jointChunk.Name}, parent {jointChunk.SkeletonParent}");
+                var jointChunks = skeletonChunk.GetChildren<Pure3D.Chunks.SkeletonJoint>();
 
+                for (var i = 0; i < jointChunks.Length; ++i)
+                {
+                    var jointChunk = jointChunks[i];
+                    var boneMatrix = ConvertMatrix(jointChunk.RestPose);
+                    //Console.WriteLine($"{i} {jointChunk.Name}, parent {jointChunk.SkeletonParent}");
+
+                    model.Bones.Add(new Bone
+                    {
+                        Name = jointChunk.Name,
+                        Transform = boneMatrix,
+                        Parent = (int)jointChunk.SkeletonParent,
+                    });
+                }
+            }
+            else
+            {
                 model.Bones.Add(new Bone
                 {
-                    Name = jointChunk.Name,
-                    Transform = boneMatrix,
-                    Parent = (int)jointChunk.SkeletonParent,
+                    Name = "root",
+                    Transform = Matrix4.Identity,
+                    Parent = 0,
                 });
             }
 
@@ -194,6 +225,7 @@ namespace DonutGame
                     var normalChunk = primChunk.GetChildren<Pure3D.Chunks.NormalList>().FirstOrDefault();
                     var uvChunk = primChunk.GetChildren<Pure3D.Chunks.UVList>().FirstOrDefault();
                     var indicesChunk = primChunk.GetChildren<Pure3D.Chunks.IndexList>().FirstOrDefault();
+                    var colorsChunk = primChunk.GetChildren<Pure3D.Chunks.ColourList>().FirstOrDefault();
                     var matrixListChunk = primChunk.GetChildren<Pure3D.Chunks.MatrixList>().FirstOrDefault();
                     var matrixPaletteChunk = primChunk.GetChildren<Pure3D.Chunks.MatrixPalette>().FirstOrDefault();
                     var weightListChunk = primChunk.GetChildren<Pure3D.Chunks.WeightList>().FirstOrDefault();
@@ -207,8 +239,9 @@ namespace DonutGame
                     model.Vertices.AddRange(Enumerable.Range(0, (int)primChunk.NumVertices).Select(i =>
                     {
                         var position = ConvertVector(positionChunk.Positions[i]);
-                        var normal = ConvertVector(normalChunk.Normals[i]);
+                        var normal = normalChunk != null ? ConvertVector(normalChunk.Normals[i]) : Vector3.UnitY;
                         var uv = new Vector2(uvChunk.UVs[i].X, 1.0f - uvChunk.UVs[i].Y);
+                        var color = colorsChunk != null ? ConvertColor(colorsChunk.Colours[i]) : Color.White;
 
                         var bone0 = 0;
 
@@ -228,7 +261,7 @@ namespace DonutGame
                             Position = position,
                             Normal = normal,
                             TexCoord0 = uv,
-                            Color = Color4.White,
+                            Color = color,
                             BoneWeights = new Vector4(1, 0, 0, 0),
                             BoneIndex = bone0,
                         };
@@ -277,10 +310,13 @@ namespace DonutGame
                 }
             }
 
-            var animChunks = animFile.RootChunk.GetChildren<Pure3D.Chunks.Animation>();
-            foreach (var animChunk in animChunks)
+            if (animFile != null)
             {
-                LoadAnimation(model, animChunk);
+                var animChunks = animFile.RootChunk.GetChildren<Pure3D.Chunks.Animation>();
+                foreach (var animChunk in animChunks)
+                {
+                    LoadAnimation(model, animChunk);
+                }
             }
 
             return model;
@@ -380,22 +416,24 @@ namespace DonutGame
 
         private void UpdateAnimation(int animIndex, float time)
         {
-            var animation = HomerModel.Animations[animIndex % HomerModel.Animations.Count];
-            var poseMatrices = new Matrix4[HomerModel.Bones.Count];
+            if (TestModel.Animations.Count == 0) return;
+
+            var animation = TestModel.Animations[animIndex % TestModel.Animations.Count];
+            var poseMatrices = new Matrix4[TestModel.Bones.Count];
             poseMatrices[0] = Matrix4.Identity;
 
             for (var index = 0; index < poseMatrices.Length; ++index)
             {
-                var bone = HomerModel.Bones[index];
+                var bone = TestModel.Bones[index];
                 var boneParent = bone.Parent;
 
                 poseMatrices[index] = animation.Tracks[index].Evalulate(time) * poseMatrices[boneParent];
             }
 
-            var boneMatrices = new Matrix4[HomerModel.Bones.Count];
+            var boneMatrices = new Matrix4[TestModel.Bones.Count];
             for (var i = 0; i < boneMatrices.Length; ++i)
             {
-                var boneMatrix = HomerModel.Bones[i].Transform;
+                var boneMatrix = TestModel.Bones[i].Transform;
                 boneMatrices[i] = boneMatrix.Inverted() * poseMatrices[i];
             }
 
@@ -442,6 +480,16 @@ namespace DonutGame
 
             GL.BindTexture(TextureTarget.Texture2D, 0);
 
+            var boneMatrices = new Matrix4[TestModel.Bones.Count];
+            for (var index = 0; index < boneMatrices.Length; ++index)
+            {
+                var bone = TestModel.Bones[index];
+                boneMatrices[index] = bone.Transform;
+            }
+
+            GL.BindBuffer(BufferTarget.TextureBuffer, TextureBufferObject);
+            GL.BufferData(BufferTarget.TextureBuffer, boneMatrices.Length * 64, boneMatrices, BufferUsageHint.StaticDraw);
+            GL.BindBuffer(BufferTarget.TextureBuffer, 0);
 
             UpdateAnimation(AnimIndex, 0.0f);
 
@@ -450,10 +498,10 @@ namespace DonutGame
             GL.BindTexture(TextureTarget.TextureBuffer, 0);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
-            GL.BufferData(BufferTarget.ArrayBuffer, HomerModel.Vertices.Count * Vertex.SizeOf, HomerModel.Vertices.ToArray(), BufferUsageHint.StaticDraw);
+            GL.BufferData(BufferTarget.ArrayBuffer, TestModel.Vertices.Count * Vertex.SizeOf, TestModel.Vertices.ToArray(), BufferUsageHint.StaticDraw);
 
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, HomerModel.Indices.Count * sizeof(uint), HomerModel.Indices.ToArray(), BufferUsageHint.StaticDraw);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, TestModel.Indices.Count * sizeof(uint), TestModel.Indices.ToArray(), BufferUsageHint.StaticDraw);
 
             VertexArrayObject = GL.GenVertexArray();
             GL.BindVertexArray(VertexArrayObject);
@@ -522,15 +570,18 @@ namespace DonutGame
             if (keyState.IsKeyDown(Key.D)) inputForce -= Vector3.UnitX;
             inputForce.Normalize();
 
-            inputForce *= keyState.IsKeyDown(Key.ShiftLeft) ? 10.0f : 2.0f;
+            inputForce *= keyState.IsKeyDown(Key.ShiftLeft) ? 100.0f : 2.0f;
 
             MainCamera.UpdateRotationQuat();
             MainCamera.Move(inputForce, dt);
             MainCamera.UpdateViewMatrix();
 
-            var anim = HomerModel.Animations[AnimIndex % HomerModel.Animations.Count];
-            AnimTime += dt * anim.FrameRate;
-            UpdateAnimation(AnimIndex, AnimTime);
+            if (TestModel.Animations.Count > 0)
+            {
+                var anim = TestModel.Animations[AnimIndex % TestModel.Animations.Count];
+                AnimTime += dt * anim.FrameRate;
+                UpdateAnimation(AnimIndex, AnimTime);
+            }
         }
 
         protected override void OnRenderFrame(FrameEventArgs e)
@@ -568,7 +619,7 @@ namespace DonutGame
             GL.Uniform1(25, 1);
 
             GL.Uniform4(22, 0.25f, 0.25f, 0.25f, 1.0f);
-            GL.DrawElements(PrimitiveType.Triangles, HomerModel.Indices.Count, DrawElementsType.UnsignedInt, 0);       
+            GL.DrawElements(PrimitiveType.Triangles, TestModel.Indices.Count, DrawElementsType.UnsignedInt, 0);       
 
             GL.BindTexture(TextureTarget.Texture2D, 0);
             GL.BindTexture(TextureTarget.TextureBuffer, 0);
