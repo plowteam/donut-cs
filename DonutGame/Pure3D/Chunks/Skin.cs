@@ -3,9 +3,11 @@
 namespace Pure3D.Chunks
 {
     [ChunkType(65537)]
-    public class Skin : Mesh
+    public class Skin : Named
     {
+        public uint Version;
         public string SkeletonName;
+        public uint NumPrimGroups;
 
         public Skin(File file, uint type) : base(file, type)
         {

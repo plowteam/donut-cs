@@ -25,7 +25,7 @@ namespace DonutGame
             layout(location = 21) uniform mat4 modelView;
             layout(location = 22) uniform vec4 tint;
             layout(location = 23) uniform float zOffset;
-            layout(location = 24) uniform samplerBuffer boneBuffer;            
+            layout(location = 24) uniform samplerBuffer boneBuffer;
 
             mat4 GetMatrix(int index)
             {
@@ -112,6 +112,8 @@ namespace DonutGame
                 animFile.Load("homer_a.p3d");
 
                 TestModel = LoadModel(modelFile, animFile);
+
+                PrintHierarchy(modelFile.RootChunk, 0);
             }
             else
             {
@@ -170,6 +172,7 @@ namespace DonutGame
 
             var rootChunk = modelFile.RootChunk;
             var meshChunks = rootChunk.GetChildren<Pure3D.Chunks.Mesh>();
+            var skinChunks = rootChunk.GetChildren<Pure3D.Chunks.Skin>();
             var skeletonChunk = rootChunk.GetChildren<Pure3D.Chunks.Skeleton>().FirstOrDefault();
 
             if (skeletonChunk != null)
@@ -208,9 +211,9 @@ namespace DonutGame
                 model.Bones[index] = bone;
             }
 
-            foreach (var meshChunk in meshChunks)
+            foreach (var skinChunk in skinChunks)
             {
-                var primChunks = meshChunk.GetChildren<Pure3D.Chunks.PrimitiveGroup>();
+                var primChunks = skinChunk.GetChildren<Pure3D.Chunks.PrimitiveGroup>();
 
                 foreach (var primChunk in primChunks)
                 {
