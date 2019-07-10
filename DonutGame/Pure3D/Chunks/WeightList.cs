@@ -5,7 +5,7 @@ namespace Pure3D.Chunks
     [ChunkType(65548)]
     public class WeightList : Chunk
     {
-        public Vector3[] Weights;
+        public float[][] Weights;
 
         public WeightList(File file, uint type) : base(file, type)
         {
@@ -15,10 +15,13 @@ namespace Pure3D.Chunks
         {
             BinaryReader reader = new BinaryReader(stream);
             uint len = reader.ReadUInt32();
-            Weights = new Vector3[len];
+            Weights = new float[len][];
             for (int i = 0; i < len; i++)
             {
-                Weights[i] = Util.ReadVector3(reader);
+                Weights[i] = new float[3];
+                Weights[i][0] = reader.ReadSingle();
+                Weights[i][1] = reader.ReadSingle();
+                Weights[i][2] = reader.ReadSingle();
             }
         }
 

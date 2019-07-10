@@ -19,7 +19,7 @@ namespace DonutGame
             layout(location = 2) in vec2 texCoord0;
             layout(location = 3) in vec4 color;
             layout(location = 4) in vec4 boneWeights;
-            layout(location = 5) in int boneIndex;
+            layout(location = 5) in ivec4 boneIndices;
 
             layout(location = 20) uniform mat4 projection;
             layout(location = 21) uniform mat4 modelView;
@@ -44,7 +44,10 @@ namespace DonutGame
                 texCoord = texCoord0;
                 vertexColor = color;
 
-                mat4 boneMatrix = GetMatrix(boneIndex) * boneWeights[0];
+                mat4 boneMatrix = GetMatrix(boneIndices[0]) * boneWeights[0];
+                boneMatrix += GetMatrix(boneIndices[1]) * boneWeights[1];
+                boneMatrix += GetMatrix(boneIndices[2]) * boneWeights[2];
+                boneMatrix += GetMatrix(boneIndices[3]) * boneWeights[3];
 
                 vec4 vertex = boneMatrix * vec4(position.xyz, 1.0);
                 vertex = modelView * vertex;
@@ -113,7 +116,7 @@ namespace DonutGame
 
                 TestModel = LoadModel(modelFile, animFile);
 
-                PrintHierarchy(modelFile.RootChunk, 0);
+                //PrintHierarchy(modelFile.RootChunk, 0);
             }
             else
             {
@@ -183,7 +186,7 @@ namespace DonutGame
                 {
                     var jointChunk = jointChunks[i];
                     var boneMatrix = ConvertMatrix(jointChunk.RestPose);
-                    //Console.WriteLine($"{i} {jointChunk.Name}, parent {jointChunk.SkeletonParent}");
+                    Console.WriteLine($"{i} {jointChunk.Name}, parent {jointChunk.SkeletonParent}");
 
                     model.Bones.Add(new Bone
                     {
@@ -246,7 +249,7 @@ namespace DonutGame
                         var uv = new Vector2(uvChunk.UVs[i].X, 1.0f - uvChunk.UVs[i].Y);
                         var color = colorsChunk != null ? ConvertColor(colorsChunk.Colours[i]) : Color.White;
 
-                        var bone0 = 0;
+                        var boneIndices = new int[4] { 0, 0, 0, 0 };
 
                         if (matrixListChunk != null && matrixPaletteChunk != null)
                         {
@@ -256,7 +259,19 @@ namespace DonutGame
                             var jointIndex2 = matrixPaletteChunk.Matrices[matrixIndex[2]];
                             var jointIndex3 = matrixPaletteChunk.Matrices[matrixIndex[3]];
 
-                            bone0 = (int)jointIndex3;
+                            boneIndices[0] = (int)jointIndex3;
+                            boneIndices[1] = (int)jointIndex2;
+                            boneIndices[2] = (int)jointIndex1;
+                            boneIndices[3] = (int)jointIndex0;
+                        }
+
+                        var weight = new float[4] { 1, 0, 0, 0 };
+
+                        if (weightListChunk != null)
+                        {
+                            weight[0] = weightListChunk.Weights[i][0];
+                            weight[1] = weightListChunk.Weights[i][1];
+                            weight[2] = weightListChunk.Weights[i][2];
                         }
 
                         return new Vertex
@@ -265,8 +280,8 @@ namespace DonutGame
                             Normal = normal,
                             TexCoord0 = uv,
                             Color = color,
-                            BoneWeights = new Vector4(1, 0, 0, 0),
-                            BoneIndex = bone0,
+                            BoneWeights = new Vector4(weight[0], weight[1], weight[2], weight[3]),
+                            BoneIndices = new Vector4i(boneIndices[0], boneIndices[1], boneIndices[2], boneIndices[3]),
                         };
                     }));
 
@@ -334,7 +349,7 @@ namespace DonutGame
                 Name = animChunk.Name,
             };
 
-            Console.WriteLine(anim.Name);
+            //Console.WriteLine(anim.Name);
 
             model.Animations.Add(anim);
 
@@ -473,7 +488,7 @@ namespace DonutGame
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
 
             var textureSource = new Bitmap("char_swatches_lit.bmp");
-            Console.WriteLine($"{textureSource.Width}, {textureSource.Height}");
+            //Console.WriteLine($"{textureSource.Width}, {textureSource.Height}");
 
             var bitmapData = textureSource.LockBits(new Rectangle(0, 0, textureSource.Width, textureSource.Height),
                 System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -513,7 +528,7 @@ namespace DonutGame
             GL.VertexAttribPointer(2, 2, VertexAttribPointerType.Float, false, Vertex.SizeOf, 24); // TexCoord0
             GL.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, Vertex.SizeOf, 32); // Color
             GL.VertexAttribPointer(4, 4, VertexAttribPointerType.Float, false, Vertex.SizeOf, 48); // Bone Weights
-            GL.VertexAttribIPointer(5, 1, VertexAttribIntegerType.Int, Vertex.SizeOf, (IntPtr)64); // Bone Indices
+            GL.VertexAttribIPointer(5, 4, VertexAttribIntegerType.Int, Vertex.SizeOf, (IntPtr)64); // Bone Indices
             GL.EnableVertexAttribArray(0);
             GL.EnableVertexAttribArray(1);
             GL.EnableVertexAttribArray(2);

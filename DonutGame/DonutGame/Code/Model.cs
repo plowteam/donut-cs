@@ -13,9 +13,9 @@ namespace DonutGame
         public Vector2 TexCoord0;
         public Color4 Color;
         public Vector4 BoneWeights;
-        public int BoneIndex;
+        public Vector4i BoneIndices;
 
-        public static readonly int SizeOf = 68;
+        public static readonly int SizeOf = 80;
 
         public Vertex(Vector3 position)
         {
@@ -24,7 +24,7 @@ namespace DonutGame
             TexCoord0 = Vector2.Zero;
             Color = Color4.White;
             BoneWeights = Vector4.One;
-            BoneIndex = 0;
+            BoneIndices = new Vector4i(1, 0, 0, 0);
         }
 
         public Vertex(Vector3 position, Color4 color)
@@ -34,7 +34,7 @@ namespace DonutGame
             TexCoord0 = Vector2.Zero;
             Color = color;
             BoneWeights = Vector4.One;
-            BoneIndex = 0;
+            BoneIndices = new Vector4i(1, 0, 0, 0);
         }
     }
 
